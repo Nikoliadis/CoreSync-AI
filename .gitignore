@@ -1,0 +1,65 @@
+# ---- Secrets & environment ----
+.env
+.env.*
+!.env.example
+*.pem
+*.p8
+*.p12
+*.keystore
+google-services.json
+GoogleService-Info.plist
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# ---- Node ----
+node_modules/
+.pnpm-store/
+dist/
+build/
+*.tsbuildinfo
+.turbo/
+
+# ---- Next.js ----
+.next/
+out/
+.vercel/
+
+# ---- Expo / React Native ----
+.expo/
+.expo-shared/
+android/app/build/
+ios/Pods/
+ios/build/
+*.jks
+
+# ---- Editors & OS ----
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.shared.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- Local infrastructure data ----
+.docker-data/
+postgres-data/
+redis-data/
+minio-data/
+media/
+uploads/
+
+# ---- Logs ----
+*.log
+logs/

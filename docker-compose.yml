@@ -1,0 +1,111 @@
+# Local development stack for GymPulse.
+# Production runs on Azure (see docs/12-devops-deployment.md); this file exists so that a new
+# engineer gets a working environment with `docker compose up -d` and nothing else installed.
+
+name: gympulse
+
+x-api-base: &api-base
+  build:
+    context: .
+    dockerfile: infra/docker/api.Dockerfile
+    target: development
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql+asyncpg://gympulse:gympulse@postgres:5432/gympulse
+    REDIS_URL: redis://redis:6379/0
+    CELERY_BROKER_URL: redis://redis:6379/1
+    CELERY_RESULT_BACKEND: redis://redis:6379/2
+    STORAGE_BACKEND: s3compat
+    S3_ENDPOINT_URL: http://minio:9000
+    SMTP_HOST: mailhog
+    SMTP_PORT: 1025
+  volumes:
+    - ./apps/api:/app
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  postgres:
+    # pgvector image = stock Postgres 16 + the vector extension used by the AI retrieval layer.
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: gympulse
+      POSTGRES_PASSWORD: gympulse
+      POSTGRES_DB: gympulse
+    ports: ["5432:5432"]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/docker/postgres-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gympulse -d gympulse"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports: ["6379:6379"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    <<: *api-base
+    command: uvicorn gympulse.presentation.main:app --host 0.0.0.0 --port 8000 --reload
+    ports: ["8000:8000"]
+
+  worker:
+    <<: *api-base
+    command: celery -A gympulse.infrastructure.tasks.celery_app worker -l info -Q default,ai,media
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A gympulse.infrastructure.tasks.celery_app inspect ping -d celery@$$HOSTNAME"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  beat:
+    <<: *api-base
+    command: celery -A gympulse.infrastructure.tasks.celery_app beat -l info
+
+  # Stands in for Azure Blob Storage locally; the storage port has an S3-compatible adapter
+  # so the same application code runs against both.
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: gympulse
+      MINIO_ROOT_PASSWORD: gympulse123
+    ports: ["9000:9000", "9001:9001"]
+    volumes:
+      - minio-data:/data
+
+  # Catches every outbound email in development. UI on :8025.
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports: ["1025:1025", "8025:8025"]
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+      target: development
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports: ["3000:3000"]
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+    depends_on: [api]
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:

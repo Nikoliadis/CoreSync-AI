@@ -1,0 +1,8 @@
+-- Runs once, on first container start, before Alembic.
+-- Extensions must exist before any migration references their types (e.g. vector, citext).
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "citext";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+CREATE EXTENSION IF NOT EXISTS "btree_gin";
+CREATE EXTENSION IF NOT EXISTS "vector";
+CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
