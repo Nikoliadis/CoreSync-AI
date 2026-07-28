@@ -53,7 +53,7 @@ ladder.
 Reserved. Never reused as a series colour, and never the only signal — always paired with an
 icon and a label.
 
-| Role | Hex | Meaning in GymPulse |
+| Role | Hex | Meaning in CoreSync |
 |---|---|---|
 | good | `#0CA30C` | Target met, streak alive, verified food |
 | warning | `#FAB219` | Approaching a limit, unverified data |
@@ -91,7 +91,7 @@ Charts are most of this product's surface area. They follow one validated system
 Assigned in **fixed slot order, never cycled**. Colour follows the entity, so filtering a series
 out never repaints the survivors.
 
-| Slot | Hue | Dark | Light | Typical GymPulse series |
+| Slot | Hue | Dark | Light | Typical CoreSync series |
 |---|---|---|---|---|
 | 1 | blue | `#3987E5` | `#2A78D6` | Volume |
 | 2 | orange | `#D95926` | `#EB6834` | Calories |
@@ -102,7 +102,7 @@ out never repaints the survivors.
 | 7 | violet | `#9085E9` | `#4A3AA7` | Back / group B |
 | 8 | red | `#E66767` | `#E34948` | Legs / group C |
 
-Validated against GymPulse's own chart surfaces (`#0F0F11` dark, `#FAFAFA` light):
+Validated against CoreSync's own chart surfaces (`#0F0F11` dark, `#FAFAFA` light):
 
 ```bash
 node scripts/validate_palette.js "#3987e5,#d95926,#199e70,#c98500,#d55181,#008300,#9085e9,#e66767" \

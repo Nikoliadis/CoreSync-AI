@@ -35,7 +35,7 @@ entirely. Phases 0–5 alone are a credible product.
 gantt
     dateFormat YYYY-MM-DD
     axisFormat %b
-    title GymPulse delivery plan
+    title CoreSync delivery plan
 
     section Foundation
     P0 Foundations            :p0, 2026-08-01, 3w

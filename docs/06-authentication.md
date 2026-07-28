@@ -34,8 +34,8 @@ expiry.
   "ev": true,
   "iat": 1785000000,
   "exp": 1785000900,
-  "iss": "https://api.gympulse.app",
-  "aud": "gympulse-client"
+  "iss": "https://api.coresync.ai",
+  "aud": "coresync-client"
 }
 ```
 

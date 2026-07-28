@@ -348,8 +348,8 @@ cost nothing.
 Expo Router (file-based, typed). Five tabs, with the centre tab acting as an action button
 rather than a destination.
 
-- **Deep links:** `gympulse://workout/{id}`, `gympulse://coach`, plus universal links
-  (`https://gympulse.app/...`) so shared workouts open in the app.
+- **Deep links:** `coresync://workout/{id}`, `coresync://coach`, plus universal links
+  (`https://coresync.ai/...`) so shared workouts open in the app.
 - **Modals** for pickers and quick-add — presented as sheets, dismissible by gesture.
 - **The active workout is protected**: navigating away keeps it running and shows a persistent
   "Workout in progress" banner that returns to it. Attempting to close the app mid-workout does

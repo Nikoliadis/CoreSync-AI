@@ -216,7 +216,7 @@ CREATE INDEX ix_refresh_tokens_user_active
 | Relationship | Card. | On delete | Why it is modelled this way |
 |---|---|---|---|
 | `users` → `user_profiles` | 1 : 0..1 | CASCADE | Split from `users` because the profile is large, frequently updated, and read by different code paths than authentication. Keeping `users` narrow keeps the auth hot path fast |
-| `users` → `auth_identities` | 1 : N | CASCADE | One account, many login methods. A user can start with email, later link Google and Apple. `UNIQUE(provider, provider_subject)` prevents one Google account claiming two GymPulse accounts |
+| `users` → `auth_identities` | 1 : N | CASCADE | One account, many login methods. A user can start with email, later link Google and Apple. `UNIQUE(provider, provider_subject)` prevents one Google account claiming two CoreSync accounts |
 | `users` → `refresh_tokens` | 1 : N | CASCADE | One row per active session per device. `replaced_by` builds a rotation chain: reuse of a rotated token proves theft and triggers revocation of the whole chain ([06](06-authentication.md) §4) |
 | `refresh_tokens` → `user_devices` | N : 1 | SET NULL | Lets "sign out on iPhone" revoke by device. SET NULL, not CASCADE — deleting a device must not erase the audit trail |
 | `users` → `user_settings` | 1 : 0..1 | CASCADE | Vertical partition of preference data. PK *is* the FK, which enforces the 0..1 at schema level |

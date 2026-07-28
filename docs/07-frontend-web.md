@@ -266,7 +266,7 @@ export const useActiveSessionStore = create<ActiveSessionState>()(
       clearRest: () => set({ restTimer: null }),
       reset: () => set({ sessionId: null, startedAt: null, restTimer: null, draftSets: {} }),
     }),
-    { name: 'gympulse:active-session', partialize: (s) => ({ ...s, restTimer: s.restTimer }) },
+    { name: 'coresync:active-session', partialize: (s) => ({ ...s, restTimer: s.restTimer }) },
   ),
 );
 ```
@@ -341,7 +341,7 @@ Vercel Analytics, not only in the lab.
 <script dangerouslySetInnerHTML={{ __html: `
   (function () {
     try {
-      var s = localStorage.getItem('gympulse:theme') || 'system';
+      var s = localStorage.getItem('coresync:theme') || 'system';
       var d = s === 'dark' || (s === 'system' &&
               matchMedia('(prefers-color-scheme: dark)').matches);
       document.documentElement.classList.toggle('dark', d);

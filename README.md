@@ -1,17 +1,21 @@
-# GymPulse
+# CoreSync AI
 
 A production-grade fitness ecosystem: workout tracking, nutrition logging, body progress,
 and an AI coach — on web, iOS and Android, backed by a single cloud API.
 
-> **Status:** Architecture & design phase. This repository currently contains the complete
-> technical blueprint (`docs/`) and the workspace skeleton. Implementation follows the
-> phased plan in [docs/15-roadmap.md](docs/15-roadmap.md).
+> **Status:** Phase 1 (Authentication & Profile) in progress. The complete technical
+> blueprint lives in `docs/`; the phased delivery plan is in
+> [docs/15-roadmap.md](docs/15-roadmap.md).
+
+**Naming:** the product is *CoreSync AI*. In code, config and infrastructure the short
+form `coresync` is used — Python package `coresync`, database `coresync`, API host
+`api.coresync.ai`, deep-link scheme `coresync://`.
 
 ---
 
 ## What it is
 
-| Pillar | Comparable to | What GymPulse does |
+| Pillar | Comparable to | What CoreSync does |
 |---|---|---|
 | Workout tracking | Strong, Hevy | Routines, live session logging, supersets, drop sets, rest timer, PR detection, history |
 | Nutrition tracking | MyFitnessPal | Food search, barcode scan, custom foods, recipes, macros + micronutrients, water |
@@ -44,7 +48,7 @@ Read in order. Each document is self-contained but assumes the previous ones.
 ## Repository layout
 
 ```text
-GymPulse/
+CoreSync/
 ├── apps/
 │   ├── api/            # FastAPI backend (Clean Architecture)
 │   ├── web/            # Next.js 15 web app
@@ -81,7 +85,7 @@ GymPulse/
 cp .env.example .env          # fill in secrets
 docker compose up -d          # postgres, redis, api, worker, beat, mailhog, minio
 docker compose exec api alembic upgrade head
-docker compose exec api python -m gympulse.cli seed --exercises --foods
+docker compose exec api python -m coresync.cli seed --exercises --foods
 # API      → http://localhost:8000/docs
 # Web      → http://localhost:3000
 ```

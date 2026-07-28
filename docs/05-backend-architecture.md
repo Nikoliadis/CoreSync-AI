@@ -44,7 +44,7 @@ apps/api/
 ├── migrations/
 │   ├── env.py
 │   └── versions/
-├── src/gympulse/
+├── src/coresync/
 │   │
 │   ├── core/                     # cross-cutting, framework-light
 │   │   ├── config.py             # pydantic-settings; the only place os.environ is read
@@ -192,7 +192,7 @@ Business logic lives here as plain Python, with no framework in sight.
 # domain/workout/services.py
 from dataclasses import dataclass
 from decimal import Decimal
-from gympulse.domain.workout.entities import SessionSet, PersonalRecord, RecordType
+from coresync.domain.workout.entities import SessionSet, PersonalRecord, RecordType
 
 
 @dataclass(frozen=True)
@@ -642,26 +642,26 @@ Conventions that are not enforced decay. These run in CI:
 ```toml
 # pyproject.toml
 [tool.importlinter]
-root_package = "gympulse"
+root_package = "coresync"
 
 [[tool.importlinter.contracts]]
 name = "Clean Architecture layers"
 type = "layers"
-layers = ["gympulse.presentation", "gympulse.application", "gympulse.domain"]
+layers = ["coresync.presentation", "coresync.application", "coresync.domain"]
 
 [[tool.importlinter.contracts]]
 name = "Domain is framework-free"
 type = "forbidden"
-source_modules = ["gympulse.domain"]
+source_modules = ["coresync.domain"]
 forbidden_modules = ["fastapi", "sqlalchemy", "redis", "httpx", "celery", "azure"]
 
 [[tool.importlinter.contracts]]
 name = "Domain modules are independent"
 type = "independence"
 modules = [
-    "gympulse.domain.identity", "gympulse.domain.workout",
-    "gympulse.domain.nutrition", "gympulse.domain.progress",
-    "gympulse.domain.coaching", "gympulse.domain.social",
+    "coresync.domain.identity", "coresync.domain.workout",
+    "coresync.domain.nutrition", "coresync.domain.progress",
+    "coresync.domain.coaching", "coresync.domain.social",
 ]
 ```
 

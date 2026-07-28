@@ -1,0 +1,162 @@
+[project]
+name = "coresync-api"
+version = "0.1.0"
+description = "CoreSync API — workout, nutrition and progress tracking with an AI coach"
+requires-python = ">=3.12"
+
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "gunicorn>=23.0",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "email-validator>=2.2",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "redis>=5.2",
+    "celery>=5.4",
+    "argon2-cffi>=23.1",
+    "pyjwt[crypto]>=2.10",
+    "httpx>=0.27",
+    "aiosmtplib>=3.0",
+    "jinja2>=3.1",
+    "structlog>=24.4",
+    "orjson>=3.10",
+    "python-multipart>=0.0.17",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "pytest-xdist>=3.6",
+    "hypothesis>=6.115",
+    "testcontainers[postgres]>=4.8",
+    "polyfactory>=2.18",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "import-linter>=2.1",
+    "types-passlib",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/coresync"]
+
+# ---------------------------------------------------------------------------- ruff
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",      # pycodestyle
+    "F",           # pyflakes
+    "I",           # isort
+    "N",           # pep8-naming
+    "UP",          # pyupgrade
+    "B",           # bugbear
+    "A",           # builtins shadowing
+    "C4",          # comprehensions
+    "DTZ",         # naive datetimes — every timestamp in this system is tz-aware
+    "S",           # bandit
+    "ASYNC",       # blocking calls in async code
+    "RUF",
+]
+ignore = [
+    "S101",        # assert — used in tests
+    "B008",        # function call in default arg — this is how FastAPI Depends works
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106", "S311"]          # hardcoded test credentials are fine
+"migrations/*" = ["E501", "N999"]
+# `PgUUID` is the conventional alias for postgresql.UUID and reads better than the
+# alternative of shadowing the stdlib name.
+"src/coresync/infrastructure/database/models/*" = ["N811"]
+# S105 fires on field names and defaults like `token_type = "Bearer"`, which are
+# protocol constants rather than credentials.
+"src/coresync/presentation/schemas/*" = ["S105"]
+"src/coresync/infrastructure/external/oidc.py" = ["S105"]
+
+# ---------------------------------------------------------------------------- mypy
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+
+# The domain and application layers hold the business rules, so they carry the
+# strictest checking. Infrastructure deals with untyped third parties.
+[[tool.mypy.overrides]]
+module = ["coresync.domain.*", "coresync.application.*", "coresync.core.*"]
+disallow_untyped_defs = true
+disallow_any_generics = true
+strict_equality = true
+warn_return_any = true
+
+[[tool.mypy.overrides]]
+module = ["testcontainers.*", "argon2.*", "celery.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "--strict-markers --strict-config"
+markers = [
+    "integration: requires a real database",
+    "slow: takes more than a second",
+]
+filterwarnings = ["error", "ignore::DeprecationWarning:passlib.*"]
+
+[tool.coverage.run]
+source = ["src/coresync"]
+omit = ["*/migrations/*", "*/tests/*"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\."]
+
+# ---------------------------------------------------------------------- import-linter
+# The architecture is enforced here, not by good intentions. See docs/05.
+[tool.importlinter]
+root_package = "coresync"
+
+[[tool.importlinter.contracts]]
+name = "Clean Architecture layers"
+type = "layers"
+layers = [
+    "coresync.presentation",
+    "coresync.application",
+    "coresync.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain is framework-free"
+type = "forbidden"
+source_modules = ["coresync.domain"]
+forbidden_modules = [
+    "fastapi", "sqlalchemy", "redis", "httpx", "celery", "azure", "alembic", "jwt", "argon2",
+]
+
+[[tool.importlinter.contracts]]
+name = "Application does not depend on concrete infrastructure"
+type = "forbidden"
+source_modules = ["coresync.application"]
+forbidden_modules = ["coresync.infrastructure", "fastapi", "sqlalchemy"]
+
+[[tool.importlinter.contracts]]
+name = "Domain modules are independent"
+type = "independence"
+modules = [
+    "coresync.domain.identity",
+    "coresync.domain.profile",
+]

@@ -1,6 +1,6 @@
 # 11 · Security & Privacy
 
-GymPulse holds health data, body measurements and progress photos. Under GDPR most of this is
+CoreSync holds health data, body measurements and progress photos. Under GDPR most of this is
 **special-category data** (Article 9). The security bar is therefore higher than for a typical
 consumer app, and privacy is a design constraint rather than a legal afterthought.
 
@@ -37,7 +37,7 @@ Nation-state adversaries, physical attacks on Azure datacentres, compromised end
 
 ## 2. OWASP Top 10 (2021) — control mapping
 
-| Risk | Controls in GymPulse |
+| Risk | Controls in CoreSync |
 |---|---|
 | **A01 Broken access control** | `user_id` is a required parameter on every repository read ([05](05-backend-architecture.md) §3) — there is no method signature that permits an unscoped fetch. UUIDv7 ids prevent enumeration. `404` not `403` for foreign resources. Role + entitlement checks server-side only. Automated IDOR test suite that replays every authenticated endpoint with a second user's ids |
 | **A02 Cryptographic failures** | TLS 1.2+ everywhere, HSTS with preload. Argon2id password hashing (m=64 MiB, t=3, p=4). Tokens stored as SHA-256 hashes. AES-256 at rest (Azure-managed). Progress photos in a private container, served only via 15-minute SAS URLs. No secrets in code, config files or logs |
@@ -80,8 +80,8 @@ SECURITY_HEADERS = {
         "default-src 'self'; "
         "script-src 'self' 'strict-dynamic' 'nonce-{nonce}'; "
         "style-src 'self' 'unsafe-inline'; "        # Tailwind runtime styles
-        "img-src 'self' data: blob: https://cdn.gympulse.app; "
-        "connect-src 'self' https://api.gympulse.app; "
+        "img-src 'self' data: blob: https://cdn.coresync.ai; "
+        "connect-src 'self' https://api.coresync.ai; "
         "font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     ),
 }
@@ -91,7 +91,7 @@ Nonce-based CSP with `strict-dynamic` — not an allow-list of CDN hostnames, wh
 bypassable via any hosted library on those domains.
 
 ### 3.4 CORS
-Explicit origin allow-list (`https://gympulse.app`, `https://www.gympulse.app`, and localhost in
+Explicit origin allow-list (`https://coresync.ai`, `https://www.coresync.ai`, and localhost in
 development). `allow_credentials=True` with `allow_origins=["*"]` is a contradiction the browser
 rejects and a mistake we cannot make because the origin list is validated at startup. Mobile
 clients do not send `Origin` and are unaffected.

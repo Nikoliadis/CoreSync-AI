@@ -1,0 +1,160 @@
+name: API CI
+
+on:
+  pull_request:
+    paths: ["apps/api/**", ".github/workflows/api-ci.yml"]
+  push:
+    branches: [main]
+    paths: ["apps/api/**"]
+
+concurrency:
+  # A new push supersedes an in-flight run for the same ref.
+  group: api-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  WORKING_DIR: apps/api
+
+jobs:
+  quality:
+    name: Lint, types & architecture
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - run: uv sync --all-extras --dev
+
+      - name: Ruff (lint)
+        run: uv run ruff check .
+      - name: Ruff (format)
+        run: uv run ruff format --check .
+      - name: Mypy (domain + application + core)
+        run: uv run mypy src/coresync/domain src/coresync/application src/coresync/core
+      - name: Architecture contracts
+        # The dependency rule is enforced here, not by good intentions: domain stays
+        # framework-free and the layers only point inward.
+        run: uv run lint-imports
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: coresync
+          POSTGRES_PASSWORD: coresync
+          POSTGRES_DB: coresync_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U coresync"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://coresync:coresync@localhost:5432/coresync_test
+      ENVIRONMENT: test
+      JWT_SECRET_KEY: ci-secret-key-that-is-long-enough-32b
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - run: uv sync --all-extras --dev
+
+      - name: Apply migrations
+        # Running the real migrations rather than metadata.create_all is the only way
+        # the test schema is guaranteed to match production, triggers and all.
+        run: uv run alembic upgrade head
+
+      - name: Unit tests
+        run: uv run pytest tests/unit -q --cov=coresync --cov-report=xml
+
+      - name: Integration & API tests
+        run: uv run pytest tests/api tests/integration -q --cov=coresync --cov-append --cov-report=xml
+
+      - name: Coverage gate
+        run: uv run coverage report --fail-under=80
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: ${{ env.WORKING_DIR }}/coverage.xml
+
+  security:
+    name: Security scans
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: astral-sh/setup-uv@v3
+      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - run: uv sync --all-extras --dev
+      - name: Dependency audit
+        run: uv run pip-audit --strict
+      - name: Container scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: apps/api
+          severity: "HIGH,CRITICAL"
+          exit-code: "1"
+
+  openapi:
+    name: OpenAPI contract
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+    env:
+      ENVIRONMENT: test
+      JWT_SECRET_KEY: ci-secret-key-that-is-long-enough-32b
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv python install ${{ env.PYTHON_VERSION }}
+      - run: uv sync --all-extras --dev
+
+      - name: Export the spec
+        run: |
+          uv run python -c "
+          import json
+          from coresync.core.config import Settings
+          from coresync.presentation.main import create_app
+          app = create_app(Settings())
+          print(json.dumps(app.openapi(), indent=2))
+          " > openapi.json
+
+      - name: Fail on an unversioned breaking change
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=1
+          git show origin/${{ github.base_ref }}:apps/api/openapi.json > base.json 2>/dev/null || exit 0
+          npx --yes oasdiff breaking base.json openapi.json --fail-on ERR
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openapi
+          path: ${{ env.WORKING_DIR }}/openapi.json

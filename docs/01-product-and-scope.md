@@ -2,7 +2,7 @@
 
 ## 1. Positioning
 
-GymPulse merges four products that users currently run side by side:
+CoreSync merges four products that users currently run side by side:
 
 - **Strong / Hevy** — the fastest possible in-gym set logger.
 - **MyFitnessPal** — the food database and diary.
@@ -10,10 +10,10 @@ GymPulse merges four products that users currently run side by side:
 - **A coach** — the interpretation layer nobody automates well.
 
 The wedge is the **interpretation layer**. Logging apps produce data and leave the user to
-draw conclusions. GymPulse closes the loop: it reads your training, your food, your weight
+draw conclusions. CoreSync closes the loop: it reads your training, your food, your weight
 trend and your photos, and tells you what to change this week and why.
 
-**Product promise:** *"Log it once. GymPulse tells you what it means and what to do next."*
+**Product promise:** *"Log it once. CoreSync tells you what it means and what to do next."*
 
 ## 2. Personas
 
@@ -162,7 +162,7 @@ Architectural consequences, decided now to avoid a later rewrite:
 
 Explicitly not building, so nobody designs for them:
 
-- A medical or diagnostic device. GymPulse gives fitness information, not medical advice.
+- A medical or diagnostic device. CoreSync gives fitness information, not medical advice.
 - A social network. Social features exist to retain lifters, not to compete with Instagram.
 - A live video coaching platform.
 - A hardware ecosystem.

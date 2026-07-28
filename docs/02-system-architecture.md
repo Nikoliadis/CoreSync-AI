@@ -28,7 +28,7 @@ graph TB
         U2["Admin / Content moderator"]
     end
 
-    GP["<b>GymPulse Platform</b><br/>Workout, nutrition, progress<br/>tracking and AI coaching"]
+    GP["<b>CoreSync Platform</b><br/>Workout, nutrition, progress<br/>tracking and AI coaching"]
 
     subgraph External
         AOAI["Azure OpenAI<br/>chat · vision · embeddings"]
