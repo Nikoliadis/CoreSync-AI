@@ -10,6 +10,10 @@ from __future__ import annotations
 from types import TracebackType
 from typing import Protocol
 
+from coresync.domain.catalog.repositories import (
+    CatalogReferenceRepository,
+    ExerciseRepository,
+)
 from coresync.domain.identity.repositories import (
     AuthIdentityRepository,
     RefreshTokenRepository,
@@ -24,6 +28,15 @@ from coresync.domain.profile.repositories import (
     UserSettingsRepository,
 )
 from coresync.domain.progress.repositories import WeightLogRepository
+from coresync.domain.workout.repositories import (
+    ActivitySummaryRepository,
+    ExerciseStatisticsRepository,
+    PersonalRecordRepository,
+    RoutineRepository,
+    StreakRepository,
+    SyncOperationLogRepository,
+    WorkoutSessionRepository,
+)
 
 
 class UnitOfWork(Protocol):
@@ -37,6 +50,15 @@ class UnitOfWork(Protocol):
     targets: NutritionTargetRepository
     settings: UserSettingsRepository
     weights: WeightLogRepository
+    exercises: ExerciseRepository
+    catalog: CatalogReferenceRepository
+    routines: RoutineRepository
+    sessions: WorkoutSessionRepository
+    records: PersonalRecordRepository
+    summaries: ActivitySummaryRepository
+    exercise_stats: ExerciseStatisticsRepository
+    streaks: StreakRepository
+    sync_log: SyncOperationLogRepository
 
     async def __aenter__(self) -> UnitOfWork: ...
 

@@ -78,6 +78,14 @@ jobs:
         # the test schema is guaranteed to match production, triggers and all.
         run: uv run alembic upgrade head
 
+      - name: Seed the exercise catalog
+        # Run twice on purpose. The seeder is upsert-by-deterministic-id and runs at
+        # deploy time on every release, so "running it again is a no-op" is a property
+        # worth proving rather than assuming.
+        run: |
+          uv run python -m coresync.infrastructure.seed.runner
+          uv run python -m coresync.infrastructure.seed.runner
+
       - name: Unit tests
         run: uv run pytest tests/unit -q --cov=coresync --cov-report=xml
 

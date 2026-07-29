@@ -14,6 +14,18 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.asyncio import Redis
 
+from coresync.application.catalog.use_cases import (
+    CreateCustomExerciseUseCase,
+    DeleteCustomExerciseUseCase,
+    GetExerciseHistoryUseCase,
+    GetExerciseRecordsUseCase,
+    GetExerciseUseCase,
+    ListCatalogMetadataUseCase,
+    ListCurrentRecordsUseCase,
+    SearchExercisesUseCase,
+    ToggleFavoriteExerciseUseCase,
+    UpdateCustomExerciseUseCase,
+)
 from coresync.application.common.dto import AuthenticatedUser
 from coresync.application.common.ports import (
     BreachedPasswordChecker,
@@ -55,6 +67,36 @@ from coresync.application.profile.use_cases import (
     UpdateProfileUseCase,
     UpdateSettingsUseCase,
 )
+from coresync.application.workout.routines import (
+    AdoptTemplateUseCase,
+    CreateRoutineUseCase,
+    DeleteRoutineUseCase,
+    DuplicateRoutineUseCase,
+    GetRoutineUseCase,
+    ListRoutinesUseCase,
+    ListTemplatesUseCase,
+    ReplaceRoutineExercisesUseCase,
+    UpdateRoutineUseCase,
+)
+from coresync.application.workout.sessions import (
+    AddSessionExerciseUseCase,
+    CompleteSessionUseCase,
+    DeleteSessionUseCase,
+    DeleteSetUseCase,
+    DiscardSessionUseCase,
+    GetActiveSessionUseCase,
+    GetCalendarUseCase,
+    GetSessionUseCase,
+    ListSessionHistoryUseCase,
+    LogSetUseCase,
+    RemoveSessionExerciseUseCase,
+    ReorderSessionExercisesUseCase,
+    StartSessionUseCase,
+    UpdateSessionExerciseUseCase,
+    UpdateSessionUseCase,
+    UpdateSetUseCase,
+)
+from coresync.application.workout.sync import SyncWorkoutsUseCase
 from coresync.core.clock import Clock, SystemClock
 from coresync.core.config import Settings, get_settings
 from coresync.core.errors import (
@@ -68,6 +110,7 @@ from coresync.core.security import JwtService, PasswordHasherService
 from coresync.domain.identity.entities import AuthProvider
 from coresync.domain.identity.policies import PasswordPolicy
 from coresync.domain.profile.services import TdeeCalculator
+from coresync.domain.workout.services import PersonalRecordDetector, VolumeCalculator
 from coresync.infrastructure.database.session import Database
 from coresync.infrastructure.database.unit_of_work import SqlAlchemyUnitOfWork
 
@@ -87,6 +130,8 @@ class AppContainer:
     hasher: PasswordHasherService
     password_policy: PasswordPolicy
     tdee_calculator: TdeeCalculator
+    pr_detector: PersonalRecordDetector
+    volume_calculator: VolumeCalculator
     email_sender: EmailSender
     revocation_store: TokenRevocationStore
     rate_limiter: RateLimiter
@@ -270,6 +315,171 @@ def delete_account_use_case(c: Container, uow: Uow) -> ScheduleAccountDeletionUs
     return ScheduleAccountDeletionUseCase(uow, c.clock)
 
 
+# ------------------------------------------------------------------- catalog
+def search_exercises_use_case(uow: Uow) -> SearchExercisesUseCase:
+    return SearchExercisesUseCase(uow)
+
+
+def get_exercise_use_case(uow: Uow) -> GetExerciseUseCase:
+    return GetExerciseUseCase(uow)
+
+
+def catalog_metadata_use_case(uow: Uow) -> ListCatalogMetadataUseCase:
+    return ListCatalogMetadataUseCase(uow)
+
+
+def create_exercise_use_case(uow: Uow) -> CreateCustomExerciseUseCase:
+    return CreateCustomExerciseUseCase(uow)
+
+
+def update_exercise_use_case(uow: Uow) -> UpdateCustomExerciseUseCase:
+    return UpdateCustomExerciseUseCase(uow)
+
+
+def delete_exercise_use_case(uow: Uow) -> DeleteCustomExerciseUseCase:
+    return DeleteCustomExerciseUseCase(uow)
+
+
+def exercise_history_use_case(uow: Uow) -> GetExerciseHistoryUseCase:
+    return GetExerciseHistoryUseCase(uow)
+
+
+def exercise_records_use_case(uow: Uow) -> GetExerciseRecordsUseCase:
+    return GetExerciseRecordsUseCase(uow)
+
+
+def current_records_use_case(uow: Uow) -> ListCurrentRecordsUseCase:
+    return ListCurrentRecordsUseCase(uow)
+
+
+def favorite_exercise_use_case(uow: Uow) -> ToggleFavoriteExerciseUseCase:
+    return ToggleFavoriteExerciseUseCase(uow)
+
+
+# ------------------------------------------------------------------ routines
+def list_routines_use_case(uow: Uow) -> ListRoutinesUseCase:
+    return ListRoutinesUseCase(uow)
+
+
+def get_routine_use_case(uow: Uow) -> GetRoutineUseCase:
+    return GetRoutineUseCase(uow)
+
+
+def create_routine_use_case(uow: Uow) -> CreateRoutineUseCase:
+    return CreateRoutineUseCase(uow)
+
+
+def update_routine_use_case(uow: Uow) -> UpdateRoutineUseCase:
+    return UpdateRoutineUseCase(uow)
+
+
+def replace_routine_exercises_use_case(uow: Uow) -> ReplaceRoutineExercisesUseCase:
+    return ReplaceRoutineExercisesUseCase(uow)
+
+
+def duplicate_routine_use_case(uow: Uow) -> DuplicateRoutineUseCase:
+    return DuplicateRoutineUseCase(uow)
+
+
+def delete_routine_use_case(uow: Uow) -> DeleteRoutineUseCase:
+    return DeleteRoutineUseCase(uow)
+
+
+def list_templates_use_case(uow: Uow) -> ListTemplatesUseCase:
+    return ListTemplatesUseCase(uow)
+
+
+def adopt_template_use_case(uow: Uow) -> AdoptTemplateUseCase:
+    return AdoptTemplateUseCase(uow)
+
+
+# ------------------------------------------------------------------ sessions
+def start_session_use_case(c: Container, uow: Uow) -> StartSessionUseCase:
+    return StartSessionUseCase(uow, c.clock)
+
+
+def active_session_use_case(uow: Uow) -> GetActiveSessionUseCase:
+    return GetActiveSessionUseCase(uow)
+
+
+def get_session_use_case(uow: Uow) -> GetSessionUseCase:
+    return GetSessionUseCase(uow)
+
+
+def update_session_use_case(uow: Uow) -> UpdateSessionUseCase:
+    return UpdateSessionUseCase(uow)
+
+
+def session_history_use_case(uow: Uow) -> ListSessionHistoryUseCase:
+    return ListSessionHistoryUseCase(uow)
+
+
+def calendar_use_case(c: Container, uow: Uow) -> GetCalendarUseCase:
+    return GetCalendarUseCase(uow, c.clock)
+
+
+def add_session_exercise_use_case(uow: Uow) -> AddSessionExerciseUseCase:
+    return AddSessionExerciseUseCase(uow)
+
+
+def update_session_exercise_use_case(uow: Uow) -> UpdateSessionExerciseUseCase:
+    return UpdateSessionExerciseUseCase(uow)
+
+
+def remove_session_exercise_use_case(uow: Uow) -> RemoveSessionExerciseUseCase:
+    return RemoveSessionExerciseUseCase(uow)
+
+
+def reorder_session_exercises_use_case(uow: Uow) -> ReorderSessionExercisesUseCase:
+    return ReorderSessionExercisesUseCase(uow)
+
+
+def log_set_use_case(c: Container, uow: Uow) -> LogSetUseCase:
+    return LogSetUseCase(uow, c.clock)
+
+
+def update_set_use_case(uow: Uow) -> UpdateSetUseCase:
+    return UpdateSetUseCase(uow)
+
+
+def delete_set_use_case(uow: Uow) -> DeleteSetUseCase:
+    return DeleteSetUseCase(uow)
+
+
+def complete_session_use_case(c: Container, uow: Uow) -> CompleteSessionUseCase:
+    return CompleteSessionUseCase(uow, c.pr_detector, c.volume_calculator, c.clock)
+
+
+def discard_session_use_case(uow: Uow) -> DiscardSessionUseCase:
+    return DiscardSessionUseCase(uow)
+
+
+def delete_session_use_case(uow: Uow) -> DeleteSessionUseCase:
+    return DeleteSessionUseCase(uow)
+
+
+def sync_use_case(c: Container) -> SyncWorkoutsUseCase:
+    """Composed from the same use cases the online endpoints call.
+
+    Each operation gets its own unit of work — hence the factory rather than a
+    request-scoped ``Uow`` — so one failing operation cannot poison the rest of the batch.
+    """
+    return SyncWorkoutsUseCase(
+        uow_factory=c.unit_of_work,
+        start_session=StartSessionUseCase(c.unit_of_work(), c.clock),
+        update_session=UpdateSessionUseCase(c.unit_of_work()),
+        add_exercise=AddSessionExerciseUseCase(c.unit_of_work()),
+        log_set=LogSetUseCase(c.unit_of_work(), c.clock),
+        update_set=UpdateSetUseCase(c.unit_of_work()),
+        delete_set=DeleteSetUseCase(c.unit_of_work()),
+        complete_session=CompleteSessionUseCase(
+            c.unit_of_work(), c.pr_detector, c.volume_calculator, c.clock
+        ),
+        discard_session=DiscardSessionUseCase(c.unit_of_work()),
+        clock=c.clock,
+    )
+
+
 def build_container(settings: Settings) -> AppContainer:
     """Compose the object graph. Called from the app lifespan and from tests."""
     from coresync.infrastructure.cache.redis_client import (
@@ -300,6 +510,8 @@ def build_container(settings: Settings) -> AppContainer:
         hasher=PasswordHasherService(settings),
         password_policy=PasswordPolicy(),
         tdee_calculator=TdeeCalculator(),
+        pr_detector=PersonalRecordDetector(),
+        volume_calculator=VolumeCalculator(),
         email_sender=SmtpEmailSender(settings)
         if settings.environment != "test"
         else ConsoleEmailSender(),

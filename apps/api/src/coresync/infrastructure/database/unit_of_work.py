@@ -6,6 +6,10 @@ from types import TracebackType
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from coresync.infrastructure.database.repositories.catalog import (
+    SqlAlchemyCatalogReferenceRepository,
+    SqlAlchemyExerciseRepository,
+)
 from coresync.infrastructure.database.repositories.identity import (
     SqlAlchemyAuthIdentityRepository,
     SqlAlchemyRefreshTokenRepository,
@@ -21,6 +25,15 @@ from coresync.infrastructure.database.repositories.profile import (
 )
 from coresync.infrastructure.database.repositories.progress import (
     SqlAlchemyWeightLogRepository,
+)
+from coresync.infrastructure.database.repositories.workout import (
+    SqlAlchemyActivitySummaryRepository,
+    SqlAlchemyExerciseStatisticsRepository,
+    SqlAlchemyPersonalRecordRepository,
+    SqlAlchemyRoutineRepository,
+    SqlAlchemyStreakRepository,
+    SqlAlchemySyncOperationLogRepository,
+    SqlAlchemyWorkoutSessionRepository,
 )
 
 
@@ -39,18 +52,37 @@ class SqlAlchemyUnitOfWork:
     async def __aenter__(self) -> SqlAlchemyUnitOfWork:
         self._session = self._session_factory()
         self._committed = False
-
-        self.users = SqlAlchemyUserRepository(self._session)
-        self.auth_identities = SqlAlchemyAuthIdentityRepository(self._session)
-        self.refresh_tokens = SqlAlchemyRefreshTokenRepository(self._session)
-        self.single_use_tokens = SqlAlchemySingleUseTokenRepository(self._session)
-        self.devices = SqlAlchemyUserDeviceRepository(self._session)
-        self.profiles = SqlAlchemyProfileRepository(self._session)
-        self.goals = SqlAlchemyGoalRepository(self._session)
-        self.targets = SqlAlchemyNutritionTargetRepository(self._session)
-        self.settings = SqlAlchemyUserSettingsRepository(self._session)
-        self.weights = SqlAlchemyWeightLogRepository(self._session)
+        self._bind_repositories()
         return self
+
+    def _bind_repositories(self) -> None:
+        """One place where repositories are attached.
+
+        Both this class and the test subclass need the full set; duplicating the list is
+        how a new repository ends up working in production and missing under test.
+        """
+        session = self._session
+        assert session is not None
+
+        self.users = SqlAlchemyUserRepository(session)
+        self.auth_identities = SqlAlchemyAuthIdentityRepository(session)
+        self.refresh_tokens = SqlAlchemyRefreshTokenRepository(session)
+        self.single_use_tokens = SqlAlchemySingleUseTokenRepository(session)
+        self.devices = SqlAlchemyUserDeviceRepository(session)
+        self.profiles = SqlAlchemyProfileRepository(session)
+        self.goals = SqlAlchemyGoalRepository(session)
+        self.targets = SqlAlchemyNutritionTargetRepository(session)
+        self.settings = SqlAlchemyUserSettingsRepository(session)
+        self.weights = SqlAlchemyWeightLogRepository(session)
+        self.exercises = SqlAlchemyExerciseRepository(session)
+        self.catalog = SqlAlchemyCatalogReferenceRepository(session)
+        self.routines = SqlAlchemyRoutineRepository(session)
+        self.sessions = SqlAlchemyWorkoutSessionRepository(session)
+        self.records = SqlAlchemyPersonalRecordRepository(session)
+        self.summaries = SqlAlchemyActivitySummaryRepository(session)
+        self.exercise_stats = SqlAlchemyExerciseStatisticsRepository(session)
+        self.streaks = SqlAlchemyStreakRepository(session)
+        self.sync_log = SqlAlchemySyncOperationLogRepository(session)
 
     async def __aexit__(
         self,
@@ -89,19 +121,6 @@ class TestUnitOfWork(SqlAlchemyUnitOfWork):
         self._session = session
         self._committed = False
         self._bind_repositories()
-
-    def _bind_repositories(self) -> None:
-        assert self._session is not None
-        self.users = SqlAlchemyUserRepository(self._session)
-        self.auth_identities = SqlAlchemyAuthIdentityRepository(self._session)
-        self.refresh_tokens = SqlAlchemyRefreshTokenRepository(self._session)
-        self.single_use_tokens = SqlAlchemySingleUseTokenRepository(self._session)
-        self.devices = SqlAlchemyUserDeviceRepository(self._session)
-        self.profiles = SqlAlchemyProfileRepository(self._session)
-        self.goals = SqlAlchemyGoalRepository(self._session)
-        self.targets = SqlAlchemyNutritionTargetRepository(self._session)
-        self.settings = SqlAlchemyUserSettingsRepository(self._session)
-        self.weights = SqlAlchemyWeightLogRepository(self._session)
 
     async def __aenter__(self) -> TestUnitOfWork:
         return self

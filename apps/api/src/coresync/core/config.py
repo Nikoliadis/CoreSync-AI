@@ -34,8 +34,10 @@ class Settings(BaseSettings):
     log_format: Literal["console", "json"] = "console"
 
     # ---------------------------------------------------------------- database
-    database_url: PostgresDsn = Field(
-        default="postgresql+asyncpg://coresync:coresync@localhost:5432/coresync"  # type: ignore[arg-type]
+    # Pydantic coerces the string default into the DSN type at validation time; mypy
+    # only sees the annotation, hence the ignore.
+    database_url: PostgresDsn = Field(  # type: ignore[assignment]
+        default="postgresql+asyncpg://coresync:coresync@localhost:5432/coresync"
     )
     database_replica_url: PostgresDsn | None = None
     database_pool_size: int = 20
@@ -44,7 +46,7 @@ class Settings(BaseSettings):
     database_echo: bool = False
 
     # ---------------------------------------------------------------- cache
-    redis_url: RedisDsn = Field(default="redis://localhost:6379/0")  # type: ignore[arg-type]
+    redis_url: RedisDsn = Field(default="redis://localhost:6379/0")  # type: ignore[assignment]
 
     # ---------------------------------------------------------------- auth
     jwt_secret_key: str = "development-secret-not-for-production-use-only"  # noqa: S105
@@ -77,6 +79,11 @@ class Settings(BaseSettings):
     # ---------------------------------------------------------------- limits
     rate_limit_anonymous_per_minute: int = 30
     rate_limit_authenticated_per_minute: int = 120
+    # Deliberately generous: a lifter logging supersets can outpace the blanket limit,
+    # and throttling someone mid-workout is a product failure (docs/04 §3).
+    rate_limit_set_logging_per_minute: int = 300
+    # Bulk endpoint with large payloads, so the opposite direction.
+    rate_limit_sync_per_minute: int = 20
     cors_allowed_origins: str = "http://localhost:3000"
 
     # ---------------------------------------------------------------- derived

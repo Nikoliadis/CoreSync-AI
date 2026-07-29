@@ -3,8 +3,10 @@
 A production-grade fitness ecosystem: workout tracking, nutrition logging, body progress,
 and an AI coach — on web, iOS and Android, backed by a single cloud API.
 
-> **Status:** Phase 1 (Authentication & Profile) in progress. The complete technical
-> blueprint lives in `docs/`; the phased delivery plan is in
+> **Status:** Phase 2 (Workout Tracking) — API complete. Exercise catalog, routines, live
+> session logging, personal records, history and the offline `/sync` contract are
+> implemented and tested; the offline-first mobile client is not yet built. The complete
+> technical blueprint lives in `docs/`; the phased delivery plan is in
 > [docs/15-roadmap.md](docs/15-roadmap.md).
 
 **Naming:** the product is *CoreSync AI*. In code, config and infrastructure the short
@@ -85,7 +87,7 @@ CoreSync/
 cp .env.example .env          # fill in secrets
 docker compose up -d          # postgres, redis, api, worker, beat, mailhog, minio
 docker compose exec api alembic upgrade head
-docker compose exec api python -m coresync.cli seed --exercises --foods
+docker compose exec api python -m coresync.infrastructure.seed.runner   # exercise catalog
 # API      → http://localhost:8000/docs
 # Web      → http://localhost:3000
 ```

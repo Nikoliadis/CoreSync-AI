@@ -56,8 +56,18 @@ def upgrade() -> None:
         sa.Column("failed_login_count", sa.Integer(), server_default="0", nullable=False),
         sa.Column("locked_until", sa.DateTime(timezone=True), nullable=True),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.CheckConstraint("role IN ('user','moderator','admin')", name="ck_users_role_valid"),
         sa.CheckConstraint(
             "status IN ('pending','active','suspended','deleted')", name="ck_users_status_valid"
@@ -67,9 +77,15 @@ def upgrade() -> None:
     )
     # Partial unique: a hard-deleted user's address becomes reusable, live ones cannot collide.
     op.create_index(
-        "uq_users_email_active", "users", ["email"], unique=True, postgresql_where=sa.text("deleted_at IS NULL")
+        "uq_users_email_active",
+        "users",
+        ["email"],
+        unique=True,
+        postgresql_where=sa.text("deleted_at IS NULL"),
     )
-    op.create_index("ix_users_status", "users", ["status"], postgresql_where=sa.text("deleted_at IS NULL"))
+    op.create_index(
+        "ix_users_status", "users", ["status"], postgresql_where=sa.text("deleted_at IS NULL")
+    )
 
     # -------------------------------------------------------------- user_devices
     op.create_table(
@@ -80,10 +96,24 @@ def upgrade() -> None:
         sa.Column("device_name", sa.String(120), nullable=True),
         sa.Column("push_token", sa.Text(), nullable=True),
         sa.Column("last_seen_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.CheckConstraint("platform IN ('ios','android','web')", name="ck_user_devices_platform_valid"),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], name="fk_user_devices_user_id_users", ondelete="CASCADE"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "platform IN ('ios','android','web')", name="ck_user_devices_platform_valid"
+        ),
+        sa.ForeignKeyConstraint(
+            ["user_id"], ["users.id"], name="fk_user_devices_user_id_users", ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id", name="pk_user_devices"),
     )
     op.create_index("ix_user_devices_user", "user_devices", ["user_id"])
@@ -97,9 +127,15 @@ def upgrade() -> None:
         sa.Column("provider_subject", sa.String(255), nullable=False),
         sa.Column("provider_email", postgresql.CITEXT(), nullable=True),
         sa.Column("raw_profile", postgresql.JSONB(), server_default="{}", nullable=False),
-        sa.Column("linked_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.CheckConstraint("provider IN ('google','apple')", name="ck_auth_identities_provider_valid"),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], name="fk_auth_identities_user_id_users", ondelete="CASCADE"),
+        sa.Column(
+            "linked_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+        ),
+        sa.CheckConstraint(
+            "provider IN ('google','apple')", name="ck_auth_identities_provider_valid"
+        ),
+        sa.ForeignKeyConstraint(
+            ["user_id"], ["users.id"], name="fk_auth_identities_user_id_users", ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id", name="pk_auth_identities"),
         # Stops one provider account from claiming two CoreSync accounts.
         sa.UniqueConstraint("provider", "provider_subject", name="uq_auth_identity"),
@@ -119,20 +155,36 @@ def upgrade() -> None:
         sa.Column("revoked_reason", sa.String(50), nullable=True),
         sa.Column("created_ip", postgresql.INET(), nullable=True),
         sa.Column("user_agent", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], name="fk_refresh_tokens_user_id_users", ondelete="CASCADE"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(
-            ["device_id"], ["user_devices.id"], name="fk_refresh_tokens_device_id_user_devices", ondelete="SET NULL"
+            ["user_id"], ["users.id"], name="fk_refresh_tokens_user_id_users", ondelete="CASCADE"
+        ),
+        sa.ForeignKeyConstraint(
+            ["device_id"],
+            ["user_devices.id"],
+            name="fk_refresh_tokens_device_id_user_devices",
+            ondelete="SET NULL",
         ),
         # Self-referencing rotation chain; SET NULL so revoking never orphans a row.
         sa.ForeignKeyConstraint(
-            ["replaced_by"], ["refresh_tokens.id"], name="fk_refresh_tokens_replaced_by_refresh_tokens", ondelete="SET NULL"
+            ["replaced_by"],
+            ["refresh_tokens.id"],
+            name="fk_refresh_tokens_replaced_by_refresh_tokens",
+            ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("id", name="pk_refresh_tokens"),
         sa.UniqueConstraint("token_hash", name="uq_refresh_tokens_token_hash"),
     )
     op.create_index(
-        "ix_refresh_tokens_user_active", "refresh_tokens", ["user_id"], postgresql_where=sa.text("revoked_at IS NULL")
+        "ix_refresh_tokens_user_active",
+        "refresh_tokens",
+        ["user_id"],
+        postgresql_where=sa.text("revoked_at IS NULL"),
     )
     op.create_index("ix_refresh_tokens_replaced_by", "refresh_tokens", ["replaced_by"])
 
@@ -145,11 +197,19 @@ def upgrade() -> None:
         sa.Column("token_hash", sa.LargeBinary(32), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.CheckConstraint(
-            "purpose IN ('email_verification','password_reset')", name="ck_single_use_tokens_purpose_valid"
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], name="fk_single_use_tokens_user_id_users", ondelete="CASCADE"),
+        sa.CheckConstraint(
+            "purpose IN ('email_verification','password_reset')",
+            name="ck_single_use_tokens_purpose_valid",
+        ),
+        sa.ForeignKeyConstraint(
+            ["user_id"], ["users.id"], name="fk_single_use_tokens_user_id_users", ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id", name="pk_single_use_tokens"),
         sa.UniqueConstraint("token_hash", name="uq_single_use_tokens_token_hash"),
     )
@@ -169,16 +229,37 @@ def upgrade() -> None:
         sa.Column("language", sa.String(10), server_default="en", nullable=False),
         sa.Column("profile_visibility", sa.String(20), server_default="private", nullable=False),
         # AI training opt-in defaults to false and stays false unless the user acts.
-        sa.Column("ai_training_opt_in", sa.Boolean(), server_default=sa.text("false"), nullable=False),
-        sa.Column("marketing_email_opt_in", sa.Boolean(), server_default=sa.text("false"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.CheckConstraint("unit_system IN ('metric','imperial')", name="ck_user_settings_unit_system_valid"),
-        sa.CheckConstraint("theme IN ('system','light','dark')", name="ck_user_settings_theme_valid"),
-        sa.CheckConstraint(
-            "profile_visibility IN ('private','followers','public')", name="ck_user_settings_profile_visibility_valid"
+        sa.Column(
+            "ai_training_opt_in", sa.Boolean(), server_default=sa.text("false"), nullable=False
         ),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], name="fk_user_settings_user_id_users", ondelete="CASCADE"),
+        sa.Column(
+            "marketing_email_opt_in", sa.Boolean(), server_default=sa.text("false"), nullable=False
+        ),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "unit_system IN ('metric','imperial')", name="ck_user_settings_unit_system_valid"
+        ),
+        sa.CheckConstraint(
+            "theme IN ('system','light','dark')", name="ck_user_settings_theme_valid"
+        ),
+        sa.CheckConstraint(
+            "profile_visibility IN ('private','followers','public')",
+            name="ck_user_settings_profile_visibility_valid",
+        ),
+        sa.ForeignKeyConstraint(
+            ["user_id"], ["users.id"], name="fk_user_settings_user_id_users", ondelete="CASCADE"
+        ),
         # The PK is the FK, which enforces the 0..1 relationship at schema level.
         sa.PrimaryKeyConstraint("user_id", name="pk_user_settings"),
     )
@@ -196,8 +277,18 @@ def upgrade() -> None:
         sa.Column("avatar_url", sa.Text(), nullable=True),
         sa.Column("bio", sa.Text(), nullable=True),
         sa.Column("onboarded_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         # 13 is the registration floor. Enforced here so no code path can create a
         # younger account, whatever the API layer does.
         sa.CheckConstraint(
@@ -218,10 +309,13 @@ def upgrade() -> None:
             name="ck_user_profiles_experience_level_valid",
         ),
         sa.CheckConstraint(
-            "height_cm IS NULL OR (height_cm > 0 AND height_cm <= 300)", name="ck_user_profiles_height_range"
+            "height_cm IS NULL OR (height_cm > 0 AND height_cm <= 300)",
+            name="ck_user_profiles_height_range",
         ),
         sa.CheckConstraint("bio IS NULL OR length(bio) <= 500", name="ck_user_profiles_bio_len"),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], name="fk_user_profiles_user_id_users", ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["user_id"], ["users.id"], name="fk_user_profiles_user_id_users", ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("user_id", name="pk_user_profiles"),
     )
 
@@ -236,23 +330,41 @@ def upgrade() -> None:
         sa.Column("target_date", sa.Date(), nullable=True),
         sa.Column("started_on", sa.Date(), nullable=False),
         sa.Column("ended_on", sa.Date(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.CheckConstraint(
             "goal_type IN ('lose_fat','maintain','gain_muscle','recomp','performance')",
             name="ck_user_goals_goal_type_valid",
         ),
-        sa.CheckConstraint("ended_on IS NULL OR ended_on >= started_on", name="ck_user_goals_goal_range"),
+        sa.CheckConstraint(
+            "ended_on IS NULL OR ended_on >= started_on", name="ck_user_goals_goal_range"
+        ),
         sa.CheckConstraint(
             "target_weight_kg IS NULL OR (target_weight_kg > 20 AND target_weight_kg <= 500)",
             name="ck_user_goals_target_weight_range",
         ),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], name="fk_user_goals_user_id_users", ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["user_id"], ["users.id"], name="fk_user_goals_user_id_users", ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id", name="pk_user_goals"),
     )
     # Exactly one open goal per user.
     op.create_index(
-        "uq_user_goals_current", "user_goals", ["user_id"], unique=True, postgresql_where=sa.text("ended_on IS NULL")
+        "uq_user_goals_current",
+        "user_goals",
+        ["user_id"],
+        unique=True,
+        postgresql_where=sa.text("ended_on IS NULL"),
     )
     op.create_index("ix_user_goals_user", "user_goals", ["user_id", "started_on"])
 
@@ -271,11 +383,24 @@ def upgrade() -> None:
         sa.Column("water_ml", sa.Numeric(9, 2), server_default="2500", nullable=False),
         sa.Column("source", sa.String(10), server_default="auto", nullable=False),
         sa.Column("rationale", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.CheckConstraint("source IN ('auto','manual','ai')", name="ck_nutrition_targets_source_valid"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.CheckConstraint(
-            "effective_to IS NULL OR effective_to >= effective_from", name="ck_nutrition_targets_targets_range"
+            "source IN ('auto','manual','ai')", name="ck_nutrition_targets_source_valid"
+        ),
+        sa.CheckConstraint(
+            "effective_to IS NULL OR effective_to >= effective_from",
+            name="ck_nutrition_targets_targets_range",
         ),
         # THE SAFETY FLOOR. Prompt instructions and service validation can both be
         # bypassed by a bug; this cannot. No code path — including the AI coach — can
@@ -283,9 +408,12 @@ def upgrade() -> None:
         sa.CheckConstraint("calories >= 1000", name="ck_nutrition_targets_calorie_floor"),
         sa.CheckConstraint("calories <= 10000", name="ck_nutrition_targets_calorie_ceiling"),
         sa.CheckConstraint(
-            "protein_g >= 0 AND carbs_g >= 0 AND fat_g >= 0", name="ck_nutrition_targets_macros_positive"
+            "protein_g >= 0 AND carbs_g >= 0 AND fat_g >= 0",
+            name="ck_nutrition_targets_macros_positive",
         ),
-        sa.CheckConstraint("water_ml >= 0 AND water_ml <= 10000", name="ck_nutrition_targets_water_range"),
+        sa.CheckConstraint(
+            "water_ml >= 0 AND water_ml <= 10000", name="ck_nutrition_targets_water_range"
+        ),
         sa.ForeignKeyConstraint(
             ["user_id"], ["users.id"], name="fk_nutrition_targets_user_id_users", ondelete="CASCADE"
         ),
@@ -299,7 +427,9 @@ def upgrade() -> None:
         unique=True,
         postgresql_where=sa.text("effective_to IS NULL"),
     )
-    op.create_index("ix_nutrition_targets_user_from", "nutrition_targets", ["user_id", "effective_from"])
+    op.create_index(
+        "ix_nutrition_targets_user_from", "nutrition_targets", ["user_id", "effective_from"]
+    )
 
     # ---------------------------------------------------------------- weight_logs
     op.create_table(
@@ -309,13 +439,27 @@ def upgrade() -> None:
         sa.Column("local_date", sa.Date(), nullable=False),
         sa.Column("weight_kg", sa.Numeric(6, 2), nullable=False),
         sa.Column("body_fat_pct", sa.Numeric(5, 2), nullable=True),
-        sa.Column("measurement_context", sa.String(20), server_default="unspecified", nullable=False),
+        sa.Column(
+            "measurement_context", sa.String(20), server_default="unspecified", nullable=False
+        ),
         sa.Column("trend_weight_kg", sa.Numeric(6, 2), nullable=True),
         sa.Column("source", sa.String(20), server_default="manual", nullable=False),
         sa.Column("note", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.CheckConstraint("weight_kg > 0 AND weight_kg <= 1000", name="ck_weight_logs_weight_range"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "weight_kg > 0 AND weight_kg <= 1000", name="ck_weight_logs_weight_range"
+        ),
         sa.CheckConstraint(
             "body_fat_pct IS NULL OR (body_fat_pct >= 0 AND body_fat_pct <= 100)",
             name="ck_weight_logs_body_fat_range",
@@ -328,7 +472,9 @@ def upgrade() -> None:
             "source IN ('manual','healthkit','google_fit','smart_scale','onboarding')",
             name="ck_weight_logs_source_valid",
         ),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], name="fk_weight_logs_user_id_users", ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["user_id"], ["users.id"], name="fk_weight_logs_user_id_users", ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id", name="pk_weight_logs"),
         # One weigh-in per day: multiple daily weights are noise and corrupt the trend.
         sa.UniqueConstraint("user_id", "local_date", name="uq_weight_per_day"),

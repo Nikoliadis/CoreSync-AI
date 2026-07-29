@@ -60,6 +60,24 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self._anonymous_limit = settings.rate_limit_anonymous_per_minute
         self._authenticated_limit = settings.rate_limit_authenticated_per_minute
+        self._set_logging_limit = settings.rate_limit_set_logging_per_minute
+        self._sync_limit = settings.rate_limit_sync_per_minute
+
+    def _limit_for(self, request: Request, default: int) -> tuple[int, str]:
+        """Per-endpoint overrides on top of the blanket limit.
+
+        Matched on the path shape rather than the route name because middleware runs
+        before routing has resolved. Each override gets its own bucket suffix, so a burst
+        of set logging cannot consume the user's general allowance and vice versa.
+        """
+        if request.method != "POST":
+            return default, "general"
+        path = request.url.path
+        if path.endswith("/sets"):
+            return self._set_logging_limit, "sets"
+        if path.endswith("/workouts/sessions/sync"):
+            return self._sync_limit, "sync"
+        return default, "general"
 
     @staticmethod
     def _limiter_for(request: Request) -> RateLimiter | None:
@@ -87,12 +105,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             # Keyed on the token rather than the user id: identity is not resolved yet
             # at middleware time, and the token is a stable per-session identifier.
             key = f"authed:{hash(auth_header[7:]) & 0xFFFFFFFF}"
-            limit = self._authenticated_limit
+            limit, bucket = self._limit_for(request, self._authenticated_limit)
         else:
             key = f"anon:{self._client_ip(request)}"
-            limit = self._anonymous_limit
+            limit, bucket = self._limit_for(request, self._anonymous_limit)
 
-        allowed, reset_in = await limiter.hit(key, limit=limit, window=timedelta(minutes=1))
+        allowed, reset_in = await limiter.hit(
+            f"{key}:{bucket}", limit=limit, window=timedelta(minutes=1)
+        )
         if not allowed:
             raise RateLimitedError(reset_in)
 

@@ -27,7 +27,7 @@ config.set_main_option("sqlalchemy.url", str(settings.database_url))
 target_metadata = Base.metadata
 
 
-def include_object(obj, name, type_, reflected, compare_to) -> bool:  # noqa: ANN001
+def include_object(obj, name, type_, reflected, compare_to) -> bool:
     """Keep autogenerate focused on tables this application owns."""
     if type_ == "table" and name in {"spatial_ref_sys", "alembic_version"}:
         return False

@@ -77,6 +77,9 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S105", "S106", "S311"]          # hardcoded test credentials are fine
 "migrations/*" = ["E501", "N999"]
+# The catalog is a data table, one exercise per line. Wrapping the rows would make the
+# library unreadable in a diff, which is the whole point of the tabular form.
+"src/coresync/infrastructure/seed/exercises.py" = ["E501"]
 # `PgUUID` is the conventional alias for postgresql.UUID and reads better than the
 # alternative of shadowing the stdlib name.
 "src/coresync/infrastructure/database/models/*" = ["N811"]
@@ -129,6 +132,9 @@ exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedE
 # The architecture is enforced here, not by good intentions. See docs/05.
 [tool.importlinter]
 root_package = "coresync"
+# Required for the "framework-free" contracts below, which name third-party packages
+# (fastapi, sqlalchemy, ...) as forbidden imports.
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "Clean Architecture layers"
@@ -156,7 +162,12 @@ forbidden_modules = ["coresync.infrastructure", "fastapi", "sqlalchemy"]
 [[tool.importlinter.contracts]]
 name = "Domain modules are independent"
 type = "independence"
+# `workout` must not reach into `catalog`: a logged set knows the numbers it recorded,
+# which is all record detection needs. Coupling them would make the catalog — the most
+# cacheable data in the system — a dependency of the hottest write path.
 modules = [
     "coresync.domain.identity",
     "coresync.domain.profile",
+    "coresync.domain.catalog",
+    "coresync.domain.workout",
 ]

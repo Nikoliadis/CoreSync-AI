@@ -135,12 +135,36 @@ async def client(api_settings: Settings, container: AppContainer) -> AsyncIterat
         yield http_client
 
 
-@pytest_asyncio.fixture(autouse=True)
-async def clean_database(api_settings: Settings) -> AsyncIterator[None]:
-    """Truncate between tests.
+@pytest_asyncio.fixture(scope="session", autouse=True)
+def seeded_catalog(postgres_url: str) -> None:
+    """Seed the exercise catalog once for the whole suite.
 
-    TRUNCATE ... CASCADE rather than per-test transactions, because the API goes through
-    its own sessions and commits for real — which is the behaviour under test.
+    Workout tests need real exercises to log against, and the catalog is reference data
+    that no test owns. Seeded once rather than per-test because it is ~270 exercises and
+    nothing under test mutates the global rows.
+    """
+    subprocess.run(
+        [sys.executable, "-m", "coresync.infrastructure.seed.runner"],
+        cwd=API_ROOT,
+        check=True,
+        env={
+            "DATABASE_URL": postgres_url,
+            "ENVIRONMENT": "test",
+            "JWT_SECRET_KEY": "integration-test-secret-key-32-bytes!",
+            "PATH": "",
+        },
+    )
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def clean_database(api_settings: Settings, seeded_catalog: None) -> AsyncIterator[None]:
+    """Remove user data between tests, leaving the seeded catalog alone.
+
+    ``DELETE FROM users`` rather than ``TRUNCATE users CASCADE``: truncate-cascade empties
+    every table with a foreign key to users, which includes ``exercises`` — that would
+    wipe the global catalog along with the test's data. A row-wise delete follows the
+    ``ON DELETE CASCADE`` chains instead, taking custom exercises with it and leaving the
+    global ones standing. Real commits, because that is the behaviour under test.
     """
     yield
     engine = create_async_engine(str(api_settings.database_url))
@@ -148,7 +172,7 @@ async def clean_database(api_settings: Settings) -> AsyncIterator[None]:
     async with factory() as session:
         from sqlalchemy import text
 
-        await session.execute(text("TRUNCATE users CASCADE"))
+        await session.execute(text("DELETE FROM users"))
         await session.commit()
     await engine.dispose()
 
@@ -185,3 +209,17 @@ async def register_and_verify(
 
 def auth_header(token_payload: dict) -> dict[str, str]:
     return {"Authorization": f"Bearer {token_payload['accessToken']}"}
+
+
+async def exercise_id_for(client: AsyncClient, headers: dict[str, str], name: str) -> str:
+    """Resolve a seeded exercise by name.
+
+    Tests name the movement they mean ("Barbell Bench Press") rather than hard-coding a
+    uuid, so the catalog can be re-ordered or re-keyed without touching the suite.
+    """
+    response = await client.get("/v1/exercises", params={"q": name}, headers=headers)
+    assert response.status_code == 200, response.text
+    items = response.json()["items"]
+    match = next((item for item in items if item["name"] == name), None)
+    assert match is not None, f"seeded exercise '{name}' not found"
+    return str(match["id"])

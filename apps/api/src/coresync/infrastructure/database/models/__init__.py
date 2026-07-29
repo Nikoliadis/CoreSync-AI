@@ -6,6 +6,23 @@ silently missing from migrations.
 """
 
 from coresync.infrastructure.database.base import Base
+from coresync.infrastructure.database.models.aggregates import (
+    DailyActivitySummaryModel,
+    ExerciseStatisticsModel,
+    UserStreakModel,
+)
+from coresync.infrastructure.database.models.catalog import (
+    EquipmentModel,
+    ExerciseCategoryModel,
+    ExerciseEquipmentModel,
+    ExerciseInstructionModel,
+    ExerciseMediaModel,
+    ExerciseModel,
+    ExerciseMuscleModel,
+    MuscleGroupModel,
+    MuscleModel,
+    UserFavoriteExerciseModel,
+)
 from coresync.infrastructure.database.models.identity import (
     AuthIdentityModel,
     RefreshTokenModel,
@@ -20,17 +37,48 @@ from coresync.infrastructure.database.models.profile import (
     ProfileModel,
 )
 from coresync.infrastructure.database.models.progress import WeightLogModel
+from coresync.infrastructure.database.models.workout import (
+    PersonalRecordModel,
+    RoutineExerciseModel,
+    RoutineModel,
+    RoutineSetModel,
+    SessionExerciseModel,
+    SessionSetModel,
+    SyncOperationModel,
+    WorkoutSessionModel,
+)
 
 __all__ = [
     "AuthIdentityModel",
     "Base",
+    "DailyActivitySummaryModel",
+    "EquipmentModel",
+    "ExerciseCategoryModel",
+    "ExerciseEquipmentModel",
+    "ExerciseInstructionModel",
+    "ExerciseMediaModel",
+    "ExerciseModel",
+    "ExerciseMuscleModel",
+    "ExerciseStatisticsModel",
     "GoalModel",
+    "MuscleGroupModel",
+    "MuscleModel",
     "NutritionTargetModel",
+    "PersonalRecordModel",
     "ProfileModel",
     "RefreshTokenModel",
+    "RoutineExerciseModel",
+    "RoutineModel",
+    "RoutineSetModel",
+    "SessionExerciseModel",
+    "SessionSetModel",
     "SingleUseTokenModel",
+    "SyncOperationModel",
     "UserDeviceModel",
+    "UserFavoriteExerciseModel",
     "UserModel",
     "UserSettingsModel",
+    "UserStreakModel",
     "WeightLogModel",
+    "WorkoutSessionModel",
 ]

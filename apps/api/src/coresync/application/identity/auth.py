@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Any
 from uuid import UUID
 
 from coresync.application.common.dto import (
@@ -408,7 +409,9 @@ class ListSessionsUseCase:
         self._uow = uow
         self._clock = clock
 
-    async def execute(self, user_id: UUID, *, current_token: str | None = None) -> list[dict]:
+    async def execute(
+        self, user_id: UUID, *, current_token: str | None = None
+    ) -> list[dict[str, Any]]:
         current_hash = hash_token(current_token) if current_token else None
         async with self._uow:
             tokens = await self._uow.refresh_tokens.list_active_for_user(user_id, self._clock.now())

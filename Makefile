@@ -50,6 +50,10 @@ migration: ## Create a migration: make migration m="add exercises"
 downgrade: ## Roll back one migration
 	$(UV) run alembic downgrade -1
 
+.PHONY: seed
+seed: ## Seed the exercise catalog (idempotent; run after migrate)
+	$(UV) run python -m coresync.infrastructure.seed.runner
+
 # ----------------------------------------------------------------------- serve
 .PHONY: dev
 dev: ## Run the API with hot reload
