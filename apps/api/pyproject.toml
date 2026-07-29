@@ -39,6 +39,8 @@ dev = [
     "mypy>=1.13",
     "import-linter>=2.1",
     "types-passlib",
+    # Used by the security job in CI. Declared here so `uv run pip-audit` resolves.
+    "pip-audit>=2.7",
 ]
 
 [build-system]

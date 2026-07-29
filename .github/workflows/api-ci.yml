@@ -121,7 +121,15 @@ jobs:
       - run: uv python install ${{ env.PYTHON_VERSION }}
       - run: uv sync --all-extras --dev
       - name: Dependency audit
-        run: uv run pip-audit --strict
+        # Audit the locked dependency set rather than the installed environment.
+        # `--strict` fails on anything it cannot audit, and the project installs itself
+        # as an editable distribution that is not on PyPI — so auditing the venv can
+        # never pass. The lock is also what actually ships, which is the thing worth
+        # auditing.
+        run: |
+          uv export --format requirements-txt --no-emit-project --no-hashes \
+            --all-extras --no-annotate --no-header > requirements.audit.txt
+          uv run pip-audit --strict -r requirements.audit.txt
       - name: Container scan
         uses: aquasecurity/trivy-action@master
         with:
