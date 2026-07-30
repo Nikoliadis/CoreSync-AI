@@ -141,7 +141,7 @@ class TestLoggingSets:
         assert logged["setNumber"] == 1
         assert logged["reps"] == 8
         # Epley, computed by the database: 100 x (1 + 8/30).
-        assert logged["estimated1rm"] == "126.67"
+        assert logged["estimatedOneRepMax"] == "126.67"
 
         session = await client.get(f"/v1/workouts/sessions/{session_id}", headers=headers)
         assert len(session.json()["exercises"][0]["sets"]) == 1
@@ -464,7 +464,7 @@ class TestHistoryAndAggregates:
         assert body["totalSessions"] == 1
         assert body["totalSets"] == 1
         assert body["totalVolumeKg"] == "800.00"
-        assert body["bestEst1rm"] == "126.67"
+        assert body["bestEstimatedOneRepMax"] == "126.67"
         assert len(body["sessions"]) == 1
         assert body["sessions"][0]["sets"][0]["reps"] == 8
 

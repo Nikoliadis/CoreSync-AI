@@ -20,6 +20,7 @@ from coresync.core.errors import (
     InvalidTokenError,
     LastAuthMethodError,
     NotFoundError,
+    ProviderEmailUnverifiedError,
 )
 from coresync.core.logging import get_logger
 from coresync.domain.identity.entities import AuthIdentity, AuthProvider, User
@@ -96,6 +97,12 @@ class OAuthSignInUseCase:
                 else:
                     if identity.email is None:
                         raise InvalidTokenError("provider did not supply an email address")
+                    if not identity.email_verified:
+                        # Registering here would record an unverified address as verified,
+                        # and if an account already holds it the insert violates
+                        # uq_users_email_active and 500s. Refused either way, so the
+                        # response cannot be used to probe which addresses exist.
+                        raise ProviderEmailUnverifiedError
                     user = User.register(
                         email=identity.email,
                         password_hash=None,  # social-only account

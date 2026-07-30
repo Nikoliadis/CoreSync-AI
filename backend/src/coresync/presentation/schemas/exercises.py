@@ -119,7 +119,7 @@ class SetHistoryResponse(ApiModel):
     distance_m: Decimal | None
     rpe: Decimal | None
     is_completed: bool
-    estimated_1rm: Decimal | None
+    estimated_one_rep_max: Decimal | None
 
 
 class ExerciseHistorySessionResponse(ApiModel):
@@ -137,7 +137,7 @@ class ExerciseHistoryResponse(ApiModel):
     total_sessions: int
     total_sets: int
     total_volume_kg: Decimal
-    best_est_1rm: Decimal | None
+    best_estimated_one_rep_max: Decimal | None
     last_performed_on: date | None
     sessions: list[ExerciseHistorySessionResponse]
 

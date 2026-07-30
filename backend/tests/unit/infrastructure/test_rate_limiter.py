@@ -13,6 +13,7 @@ import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 
+from coresync.core.ids import uuid7
 from coresync.infrastructure.cache.redis_client import RedisRateLimiter
 
 WINDOW = timedelta(minutes=1)
@@ -140,6 +141,32 @@ class TestRateLimiterFailsOpen:
         await limiter.reset("user:1")
 
         assert redis.deleted == []
+
+    async def test_the_revocation_store_does_not_fail_open(self) -> None:
+        """The mirror image of the limiter, and deliberately so.
+
+        A limiter that cannot count costs fairness; a blocklist that cannot answer costs
+        the ability to honour a logout. Failing open here would resurrect every revoked
+        token, so it raises as an upstream failure instead.
+        """
+        from coresync.core.errors import UpstreamUnavailableError
+        from coresync.infrastructure.cache.redis_client import RedisTokenRevocationStore
+
+        class DownRedis:
+            async def exists(self, key: str) -> int:
+                raise RedisTimeoutError("down")
+
+            async def setex(self, key: str, ttl: int, value: str) -> None:
+                raise RedisTimeoutError("down")
+
+        store = RedisTokenRevocationStore(DownRedis())  # type: ignore[arg-type]
+
+        with pytest.raises(UpstreamUnavailableError):
+            await store.is_revoked(uuid7())
+
+        # Revoking is best-effort: the durable half of a logout is the refresh-token
+        # revocation in Postgres, so this must not fail the logout.
+        await store.revoke(uuid7(), timedelta(minutes=15))
 
     async def test_a_programming_error_is_not_swallowed(self) -> None:
         """Failing open covers unreachability, not bugs in the limiter itself.

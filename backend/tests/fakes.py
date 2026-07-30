@@ -91,12 +91,17 @@ class FakeBreachChecker:
 
 
 class FakeOidcVerifier:
-    """Returns a scripted identity. ``"invalid"`` is rejected, so both paths are testable."""
+    """Returns a scripted identity.
+
+    Any token starting with ``invalid`` is rejected, so both paths are testable. Matched
+    by prefix rather than equality because the request schema enforces a minimum token
+    length, and a short sentinel never reaches the verifier.
+    """
 
     def __init__(self, identity: OidcIdentity | None = None) -> None:
         self.identity = identity
 
     async def verify(self, id_token: str, *, nonce: str | None = None) -> OidcIdentity:
-        if id_token == "invalid" or self.identity is None:
+        if id_token.startswith("invalid") or self.identity is None:
             raise InvalidTokenError("fake rejection")
         return self.identity

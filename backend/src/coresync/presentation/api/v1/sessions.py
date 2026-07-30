@@ -71,7 +71,7 @@ router = APIRouter(prefix="/workouts/sessions", tags=["workouts"])
 
 
 def _session_response(session) -> WorkoutSessionResponse:
-    return WorkoutSessionResponse.model_validate(vars(session))
+    return WorkoutSessionResponse.model_validate(session)
 
 
 # ------------------------------------------------------------------------- read
@@ -102,7 +102,7 @@ async def list_history(
         )
     )
     return SessionHistoryResponse(
-        items=[SessionSummaryResponse(**vars(row)) for row in page.items],
+        items=[SessionSummaryResponse.model_validate(row) for row in page.items],
         next_cursor=page.next_cursor,
         has_more=page.has_more,
     )
@@ -139,7 +139,7 @@ async def calendar(
     date_to: Annotated[date | None, Query(alias="to")] = None,
 ) -> list[CalendarDayResponse]:
     days = await use_case.execute(user.id, date_from=date_from, date_to=date_to)
-    return [CalendarDayResponse(**vars(d)) for d in days]
+    return [CalendarDayResponse.model_validate(d) for d in days]
 
 
 # ------------------------------------------------------------------ offline sync
@@ -171,7 +171,7 @@ async def sync(
         )
     )
     return SyncResponse(
-        results=[SyncOperationResultResponse(**vars(r)) for r in result.results],
+        results=[SyncOperationResultResponse.model_validate(r) for r in result.results],
         server_time=result.server_time,
     )
 
@@ -272,8 +272,8 @@ async def complete_session(
     )
     return CompletedSessionResponse(
         session=_session_response(result.session),
-        new_records=[PersonalRecordResponse(**vars(r)) for r in result.new_records],
-        streak=StreakResponse(**vars(result.streak)) if result.streak else None,
+        new_records=[PersonalRecordResponse.model_validate(r) for r in result.new_records],
+        streak=StreakResponse.model_validate(result.streak) if result.streak else None,
     )
 
 
@@ -434,7 +434,7 @@ async def log_set(
             completed_at=body.completed_at,
         )
     )
-    return SessionSetResponse(**vars(logged))
+    return SessionSetResponse.model_validate(logged)
 
 
 @router.patch(
@@ -464,7 +464,7 @@ async def update_set(
             is_completed=body.is_completed,
         )
     )
-    return SessionSetResponse(**vars(updated))
+    return SessionSetResponse.model_validate(updated)
 
 
 @router.delete(

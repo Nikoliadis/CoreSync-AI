@@ -80,7 +80,7 @@ async def update_profile(
             bio=body.bio,
         )
     )
-    return ProfileResponse(**vars(profile))
+    return ProfileResponse.model_validate(profile)
 
 
 @router.put("/me/settings", response_model=SettingsResponse, summary="Update settings")
@@ -126,7 +126,7 @@ async def complete_onboarding(
         )
     )
     return TargetCalculationResponse(
-        target=NutritionTargetResponse(**vars(result.target)),
+        target=NutritionTargetResponse.model_validate(result.target),
         bmr=result.bmr,
         tdee=result.tdee,
         was_clamped_to_floor=result.was_clamped_to_floor,
@@ -148,7 +148,7 @@ async def set_goal(
             target_date=body.target_date,
         )
     )
-    return GoalResponse(**vars(goal))
+    return GoalResponse.model_validate(goal)
 
 
 @router.post(
@@ -163,7 +163,7 @@ async def recalculate_targets(
 ) -> TargetCalculationResponse:
     result = await use_case.execute(user.id)
     return TargetCalculationResponse(
-        target=NutritionTargetResponse(**vars(result.target)),
+        target=NutritionTargetResponse.model_validate(result.target),
         bmr=result.bmr,
         tdee=result.tdee,
         was_clamped_to_floor=result.was_clamped_to_floor,
@@ -196,7 +196,7 @@ async def set_targets(
             water_ml=body.water_ml,
         )
     )
-    return NutritionTargetResponse(**vars(target))
+    return NutritionTargetResponse.model_validate(target)
 
 
 @router.get(
@@ -213,7 +213,7 @@ async def target_history(
     use_case: Annotated[ListTargetHistoryUseCase, Depends(deps.target_history_use_case)],
 ) -> list[NutritionTargetResponse]:
     targets = await use_case.execute(user.id)
-    return [NutritionTargetResponse(**vars(t)) for t in targets]
+    return [NutritionTargetResponse.model_validate(t) for t in targets]
 
 
 @router.delete(

@@ -61,13 +61,13 @@ router = APIRouter(prefix="/progress", tags=["progress"])
 
 def _weight_series_response(series) -> WeightSeriesResponse:
     return WeightSeriesResponse(
-        points=[WeightPointResponse(**vars(p)) for p in series.points],
+        points=[WeightPointResponse.model_validate(p) for p in series.points],
         latest_weight_kg=series.latest_weight_kg,
         latest_trend_kg=series.latest_trend_kg,
         change_kg=series.change_kg,
         weekly_rate_kg=series.weekly_rate_kg,
         projection=(
-            GoalProjectionResponse(**vars(series.projection)) if series.projection else None
+            GoalProjectionResponse.model_validate(series.projection) if series.projection else None
         ),
     )
 
@@ -122,7 +122,7 @@ async def log_weight(
             note=body.note,
         )
     )
-    return WeightLogResponse(**vars(logged))
+    return WeightLogResponse.model_validate(logged)
 
 
 @router.delete(
@@ -155,7 +155,7 @@ async def list_measurements(
     rows = await use_case.execute(
         MeasurementHistoryQuery(user_id=user.id, date_from=date_from, date_to=date_to)
     )
-    return [MeasurementResponse(**vars(m)) for m in rows]
+    return [MeasurementResponse.model_validate(m) for m in rows]
 
 
 @router.post(
@@ -182,7 +182,7 @@ async def log_measurement(
             note=body.note,
         )
     )
-    return MeasurementResponse(**vars(measurement))
+    return MeasurementResponse.model_validate(measurement)
 
 
 @router.get(
@@ -207,7 +207,9 @@ async def measurement_series(
             date_to=date_to,
         )
     )
-    return MeasurementSeriesResponse(trends=[SiteTrendResponse(**vars(t)) for t in series.trends])
+    return MeasurementSeriesResponse(
+        trends=[SiteTrendResponse.model_validate(t) for t in series.trends]
+    )
 
 
 @router.delete(
@@ -242,15 +244,15 @@ async def dashboard(
     return DashboardResponse(
         today=data.today,
         weight=_weight_series_response(data.weight),
-        workout_streak=StreakResponse(**vars(data.workout_streak)),
-        this_week=PeriodTotalsResponse(**vars(data.this_week)),
-        last_week=PeriodTotalsResponse(**vars(data.last_week)),
+        workout_streak=StreakResponse.model_validate(data.workout_streak),
+        this_week=PeriodTotalsResponse.model_validate(data.this_week),
+        last_week=PeriodTotalsResponse.model_validate(data.last_week),
         latest_measurement=(
-            MeasurementResponse(**vars(data.latest_measurement))
+            MeasurementResponse.model_validate(data.latest_measurement)
             if data.latest_measurement
             else None
         ),
-        recent_records=[PersonalRecordResponse(**vars(r)) for r in data.recent_records],
+        recent_records=[PersonalRecordResponse.model_validate(r) for r in data.recent_records],
         nutrition=None,
     )
 
@@ -277,7 +279,7 @@ async def volume_by_muscle_group(
             granularity=granularity,
         )
     )
-    return [MuscleVolumeBucketResponse(**vars(b)) for b in buckets]
+    return [MuscleVolumeBucketResponse.model_validate(b) for b in buckets]
 
 
 @router.get(
@@ -300,7 +302,7 @@ async def frequency(
             granularity=granularity,
         )
     )
-    return [FrequencyBucketResponse(**vars(b)) for b in buckets]
+    return [FrequencyBucketResponse.model_validate(b) for b in buckets]
 
 
 @router.get(
@@ -313,4 +315,4 @@ async def all_records(
     use_case: Annotated[ListAllRecordsUseCase, Depends(deps.all_records_use_case)],
 ) -> list[PersonalRecordResponse]:
     records = await use_case.execute(user.id)
-    return [PersonalRecordResponse(**vars(r)) for r in records]
+    return [PersonalRecordResponse.model_validate(r) for r in records]

@@ -63,7 +63,7 @@ def _set_dto(entry: SessionSet) -> SessionSetDTO:
         distance_m=entry.distance_m,
         rpe=entry.rpe,
         is_completed=entry.is_completed,
-        estimated_1rm=entry.estimated_one_rep_max,
+        estimated_one_rep_max=entry.estimated_one_rep_max,
         completed_at=entry.completed_at,
     )
 

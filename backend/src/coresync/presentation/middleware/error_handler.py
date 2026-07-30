@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from coresync.core.errors import (
@@ -65,7 +65,7 @@ def _body(
 
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
-    async def _app_error(request: Request, exc: AppError) -> ORJSONResponse:
+    async def _app_error(request: Request, exc: AppError) -> JSONResponse:
         status_code = _status_for(exc)
         request_id = getattr(request.state, "request_id", None)
 
@@ -80,14 +80,14 @@ def register_exception_handlers(app: FastAPI) -> None:
         elif isinstance(exc, AccountLockedError):
             headers["Retry-After"] = str(exc.unlock_in_seconds)
 
-        return ORJSONResponse(
+        return JSONResponse(
             status_code=status_code,
             content=_body(exc.code, exc.user_message, request_id, exc.details),
             headers=headers,
         )
 
     @app.exception_handler(RequestValidationError)
-    async def _validation_error(request: Request, exc: RequestValidationError) -> ORJSONResponse:
+    async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
         details = [
             {
                 # Drop the "body"/"query" prefix — clients care about their field name.
@@ -97,7 +97,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             }
             for err in exc.errors()
         ]
-        return ORJSONResponse(
+        return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
             content=_body(
                 "validation_error",
@@ -108,14 +108,14 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(StarletteHTTPException)
-    async def _http_error(request: Request, exc: StarletteHTTPException) -> ORJSONResponse:
+    async def _http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         codes = {
             401: "unauthenticated",
             403: "forbidden",
             404: "not_found",
             405: "method_not_allowed",
         }
-        return ORJSONResponse(
+        return JSONResponse(
             status_code=exc.status_code,
             content=_body(
                 codes.get(exc.status_code, "http_error"),
@@ -126,11 +126,11 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(Exception)
-    async def _unexpected(request: Request, exc: Exception) -> ORJSONResponse:
+    async def _unexpected(request: Request, exc: Exception) -> JSONResponse:
         logger.exception("unhandled_exception", path=request.url.path)
         # Deliberately opaque: an internal error message can leak schema, file paths or
         # library versions. The request id is how support correlates it to the trace.
-        return ORJSONResponse(
+        return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=_body(
                 "internal_error",

@@ -10,6 +10,10 @@ from uuid import UUID
 
 from coresync.core.ids import uuid7
 
+# Mirrors ck_user_profiles_dob_valid on the table.
+MINIMUM_AGE_YEARS = 13
+EARLIEST_PLAUSIBLE_BIRTH_DATE = date(1900, 1, 1)
+
 
 class Gender(StrEnum):
     MALE = "male"
@@ -68,6 +72,23 @@ class Profile:
             return None
         dob = self.date_of_birth
         return on.year - dob.year - ((on.month, on.day) < (dob.month, dob.day))
+
+    def set_date_of_birth(self, dob: date, *, today: date) -> None:
+        """Assign a date of birth, enforcing the registration age floor.
+
+        Thirteen is COPPA / GDPR Article 8 territory, and ``ck_user_profiles_dob_valid``
+        enforces it on the table. The constraint is the guarantee; this check exists so
+        the user gets a 400 explaining the rule rather than a 500 from a violated
+        constraint, which is what happens when the only enforcement is in the schema.
+        """
+        if dob <= EARLIEST_PLAUSIBLE_BIRTH_DATE:
+            raise ValueError("That date of birth is not plausible.")
+        if dob > today:
+            raise ValueError("A date of birth cannot be in the future.")
+        age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+        if age < MINIMUM_AGE_YEARS:
+            raise ValueError(f"You must be at least {MINIMUM_AGE_YEARS} to create an account.")
+        self.date_of_birth = dob
 
     @property
     def is_onboarded(self) -> bool:

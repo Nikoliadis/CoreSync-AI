@@ -7,7 +7,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import ORJSONResponse
 
 from coresync.core.config import Settings, get_settings
 from coresync.core.logging import configure_logging, get_logger
@@ -25,7 +24,16 @@ logger = get_logger(__name__)
 DESCRIPTION = """
 The CoreSync AI API.
 
-**Phase 1** — authentication, profile, onboarding, goals and nutrition targets.
+**Available now**
+* **Identity** — registration, email verification, sign-in, refresh-token rotation,
+  Google and Apple sign-in.
+* **Profile** — onboarding, goals and nutrition targets.
+* **Workouts** — exercise catalog, routines, live session logging, personal records,
+  history, and a bulk offline-sync endpoint.
+* **Progress** — weight with an EWMA trend, body measurements, statistics and the
+  dashboard bundle.
+
+**Not yet built:** nutrition logging, progress photos and the AI coach.
 
 Conventions:
 * camelCase on the wire, cursor pagination, `Idempotency-Key` on creating POSTs.
@@ -57,7 +65,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         description=DESCRIPTION,
         version="0.1.0",
         lifespan=lifespan,
-        default_response_class=ORJSONResponse,
+        # No custom response class: FastAPI now serialises straight to JSON bytes via
+        # Pydantic when a response model is declared, which is faster than routing through
+        # ORJSONResponse and no longer needs it. Passing one emits a deprecation warning,
+        # which the test suite (filterwarnings = error) turns into a failure on every
+        # response. docs/05 §10 still cites orjson for this and is out of date.
         # The schema is public in development and behind auth in production, so an
         # attacker cannot enumerate the API surface for free.
         docs_url=None if settings.is_production else "/docs",

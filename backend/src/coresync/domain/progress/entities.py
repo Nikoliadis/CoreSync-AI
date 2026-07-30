@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
 from uuid import UUID
 
@@ -80,4 +80,9 @@ class WeightLog:
         if previous_trend is None:
             self.trend_weight_kg = self.weight_kg
         else:
-            self.trend_weight_kg = previous_trend + smoothing * (self.weight_kg - previous_trend)
+            raw = previous_trend + smoothing * (self.weight_kg - previous_trend)
+            # Quantised to the column's scale. Without this the value returned by a write
+            # carries more precision than the numeric(6,2) that stores it, so the client
+            # sees 80.200 now and 80.20 on the next read — the same weigh-in appearing to
+            # change on its own.
+            self.trend_weight_kg = raw.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)

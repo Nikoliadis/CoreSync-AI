@@ -126,6 +126,15 @@ class SqlAlchemyRoutineRepository:
         model = await self._session.get(RoutineModel, routine.id)
         if model is None:
             raise ValueError(f"routine {routine.id} does not exist")
+
+        # The old rows are deleted and flushed before the new ones are added. Assigning
+        # the collection in one step lets SQLAlchemy interleave the inserts with the
+        # orphan deletes, and `uq_routine_exercise_position` then trips on a position the
+        # outgoing row still holds — reordering an exercise into a slot that is about to
+        # be vacated is the common case, not an edge one.
+        model.exercises = []
+        await self._session.flush()
+
         model.exercises = [
             RoutineExerciseMapper.to_model(entry, routine.id) for entry in routine.exercises
         ]

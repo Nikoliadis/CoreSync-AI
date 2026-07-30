@@ -87,7 +87,7 @@ async def search_exercises(
     )
     response.headers["Cache-Control"] = _CATALOG_CACHE
     return ExercisePageResponse(
-        items=[ExerciseResponse(**vars(e)) for e in page.items],
+        items=[ExerciseResponse.model_validate(e) for e in page.items],
         total=page.total,
         limit=page.limit,
         offset=page.offset,
@@ -106,7 +106,7 @@ async def muscle_groups(
     use_case: Annotated[ListCatalogMetadataUseCase, Depends(deps.catalog_metadata_use_case)],
 ) -> list[MuscleGroupResponse]:
     response.headers["Cache-Control"] = _META_CACHE
-    return [MuscleGroupResponse(**vars(g)) for g in await use_case.muscle_groups()]
+    return [MuscleGroupResponse.model_validate(g) for g in await use_case.muscle_groups()]
 
 
 @router.get(
@@ -118,7 +118,7 @@ async def equipment_list(
     use_case: Annotated[ListCatalogMetadataUseCase, Depends(deps.catalog_metadata_use_case)],
 ) -> list[EquipmentResponse]:
     response.headers["Cache-Control"] = _META_CACHE
-    return [EquipmentResponse(**vars(e)) for e in await use_case.equipment()]
+    return [EquipmentResponse.model_validate(e) for e in await use_case.equipment()]
 
 
 @router.get(
@@ -132,7 +132,7 @@ async def categories(
     use_case: Annotated[ListCatalogMetadataUseCase, Depends(deps.catalog_metadata_use_case)],
 ) -> list[ExerciseCategoryResponse]:
     response.headers["Cache-Control"] = _META_CACHE
-    return [ExerciseCategoryResponse(**vars(c)) for c in await use_case.categories()]
+    return [ExerciseCategoryResponse.model_validate(c) for c in await use_case.categories()]
 
 
 @router.post(
@@ -167,7 +167,7 @@ async def create_exercise(
             equipment_slugs=tuple(body.equipment_slugs),
         )
     )
-    return ExerciseResponse(**vars(exercise))
+    return ExerciseResponse.model_validate(exercise)
 
 
 @router.get(
@@ -184,7 +184,7 @@ async def get_exercise(
 ) -> ExerciseResponse:
     exercise = await use_case.execute(user.id, exercise_id)
     response.headers["Cache-Control"] = _CATALOG_CACHE
-    return ExerciseResponse(**vars(exercise))
+    return ExerciseResponse.model_validate(exercise)
 
 
 @router.patch(
@@ -211,7 +211,7 @@ async def update_exercise(
             description=body.description,
         )
     )
-    return ExerciseResponse(**vars(exercise))
+    return ExerciseResponse.model_validate(exercise)
 
 
 @router.delete(
@@ -242,7 +242,7 @@ async def exercise_history(
     limit: Annotated[int, Query(ge=1, le=100)] = 30,
 ) -> ExerciseHistoryResponse:
     history = await use_case.execute(user.id, exercise_id, limit=limit)
-    return ExerciseHistoryResponse(**vars(history))
+    return ExerciseHistoryResponse.model_validate(history)
 
 
 @router.get(
@@ -257,7 +257,7 @@ async def exercise_records(
     use_case: Annotated[GetExerciseRecordsUseCase, Depends(deps.exercise_records_use_case)],
 ) -> list[PersonalRecordResponse]:
     records = await use_case.execute(user.id, exercise_id)
-    return [PersonalRecordResponse(**vars(r)) for r in records]
+    return [PersonalRecordResponse.model_validate(r) for r in records]
 
 
 @router.post(

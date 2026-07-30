@@ -34,6 +34,14 @@ async def health() -> HealthResponse:
     return HealthResponse(status="ok", version=os.getenv("BUILD_VERSION", "dev"))
 
 
+# A cold pool connection includes TCP setup, TLS and authentication; measured at ~300 ms
+# against a local container and slower across a network. A 250 ms budget therefore failed
+# healthy instances on their first probe, pulling a fresh pod out of the load balancer for
+# no reason — the restart storm this endpoint exists to prevent. Two seconds is still far
+# below any sensible probe interval, and a dependency slower than that is genuinely unwell.
+_PROBE_TIMEOUT_SECONDS = 2.0
+
+
 @router.get("/health/ready", response_model=ReadinessResponse, summary="Readiness probe")
 async def readiness(container: Container, response: Response) -> ReadinessResponse:
     """Checks the dependencies this instance needs to serve traffic."""
@@ -41,7 +49,7 @@ async def readiness(container: Container, response: Response) -> ReadinessRespon
 
     async def check_database() -> None:
         try:
-            async with asyncio.timeout(0.25):
+            async with asyncio.timeout(_PROBE_TIMEOUT_SECONDS):
                 async with container.database.session() as session:
                     await session.execute(text("SELECT 1"))
             checks["database"] = "ok"
@@ -50,7 +58,7 @@ async def readiness(container: Container, response: Response) -> ReadinessRespon
 
     async def check_redis() -> None:
         try:
-            async with asyncio.timeout(0.25):
+            async with asyncio.timeout(_PROBE_TIMEOUT_SECONDS):
                 await container.redis.ping()
             checks["redis"] = "ok"
         except Exception as exc:

@@ -62,7 +62,7 @@ def _to_inputs(exercises: list[RoutineExerciseRequest]) -> list[RoutineExerciseI
 
 
 def _response(routine) -> RoutineResponse:
-    return RoutineResponse.model_validate(vars(routine))
+    return RoutineResponse.model_validate(routine)
 
 
 @router.get("", response_model=list[RoutineResponse], summary="Your routines, grouped by folder")

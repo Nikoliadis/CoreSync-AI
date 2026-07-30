@@ -92,7 +92,12 @@ services:
     image: mailhog/mailhog:latest
     ports: ["1025:1025", "8025:8025"]
 
+  # The Next.js app does not exist yet, so neither does docker/web.Dockerfile. Left here
+  # as the intended shape but behind a profile, because a service that cannot build makes
+  # a plain `docker compose up` fail and hides which services actually started.
+  # Enable with: docker compose --profile web up -d
   web:
+    profiles: ["web"]
     build:
       context: .
       dockerfile: docker/web.Dockerfile

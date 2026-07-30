@@ -11,6 +11,7 @@ from redis.asyncio import ConnectionPool, Redis
 from redis.exceptions import RedisError
 
 from coresync.core.config import Settings
+from coresync.core.errors import UpstreamUnavailableError
 from coresync.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -33,6 +34,13 @@ class RedisTokenRevocationStore:
 
     Entries live only as long as the token would have. The set therefore stays roughly
     proportional to recent logouts, not to total users.
+
+    **Unavailability fails closed, unlike the rate limiter.** The two look alike and are
+    not: a limiter that cannot count costs fairness, while a blocklist that cannot answer
+    costs the ability to honour a logout. Failing open here would silently resurrect every
+    revoked token, so an unreachable Redis raises instead — as an upstream failure (503),
+    which is both true and retryable, rather than an unauthenticated 401 that would tell
+    the user their perfectly good session had ended.
     """
 
     _PREFIX = "revoked:jti:"
@@ -41,10 +49,30 @@ class RedisTokenRevocationStore:
         self._redis = redis
 
     async def revoke(self, jti: UUID, ttl: timedelta) -> None:
-        await self._redis.setex(f"{self._PREFIX}{jti}", int(ttl.total_seconds()), "1")
+        """Best-effort. The durable half of a logout is the refresh-token revocation in
+        Postgres; this only shortens the window on an access token that expires in
+        minutes anyway. Failing the whole logout over it would be worse than leaving that
+        window open, so the failure is logged and the logout stands."""
+        try:
+            await self._redis.setex(f"{self._PREFIX}{jti}", int(ttl.total_seconds()), "1")
+        except (RedisError, OSError) as exc:
+            logger.warning(
+                "token_revocation_store_unavailable",
+                operation="revoke",
+                error=type(exc).__name__,
+                access_token_remains_valid_until_expiry=True,
+            )
 
     async def is_revoked(self, jti: UUID) -> bool:
-        return await self._redis.exists(f"{self._PREFIX}{jti}") == 1
+        try:
+            return await self._redis.exists(f"{self._PREFIX}{jti}") == 1
+        except (RedisError, OSError) as exc:
+            logger.error(
+                "token_revocation_store_unavailable",
+                operation="is_revoked",
+                error=type(exc).__name__,
+            )
+            raise UpstreamUnavailableError from exc
 
 
 class RedisRateLimiter:

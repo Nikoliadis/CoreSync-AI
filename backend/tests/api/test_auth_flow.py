@@ -69,7 +69,7 @@ class TestRegistration:
             "/v1/auth/register",
             json={
                 "email": "breach@example.com",
-                "password": "breached-password-123",
+                "password": "leaked-passphrase-alpha",
                 "displayName": "Breached",
                 "timezone": "UTC",
                 "acceptedTerms": True,
@@ -356,13 +356,19 @@ class TestOAuth:
         assert body["user"]["status"] == "active"
 
     async def test_signing_in_twice_reuses_the_same_account(self, client: AsyncClient) -> None:
-        first = await client.post("/v1/auth/oauth/google", json={"idToken": "valid"})
-        second = await client.post("/v1/auth/oauth/google", json={"idToken": "valid"})
+        first = await client.post(
+            "/v1/auth/oauth/google", json={"idToken": "valid-google-id-token"}
+        )
+        second = await client.post(
+            "/v1/auth/oauth/google", json={"idToken": "valid-google-id-token"}
+        )
         assert first.json()["user"]["id"] == second.json()["user"]["id"]
         assert second.json()["isNewUser"] is False
 
     async def test_rejects_an_invalid_id_token(self, client: AsyncClient) -> None:
-        response = await client.post("/v1/auth/oauth/google", json={"idToken": "invalid"})
+        response = await client.post(
+            "/v1/auth/oauth/google", json={"idToken": "invalid-google-id-token"}
+        )
         assert response.status_code == 401
 
     async def test_links_to_an_existing_verified_account(
@@ -373,7 +379,9 @@ class TestOAuth:
     ) -> None:
         """Auto-linking is only safe when both sides assert a verified address."""
         await register_and_verify(client, email_sender, email="social@example.com")
-        response = await client.post("/v1/auth/oauth/google", json={"idToken": "valid"})
+        response = await client.post(
+            "/v1/auth/oauth/google", json={"idToken": "valid-google-id-token"}
+        )
         assert response.status_code == 200
         assert response.json()["isNewUser"] is False
 
@@ -400,6 +408,8 @@ class TestOAuth:
         )
         victim_id = first.json()["user"]["id"]
 
-        response = await client.post("/v1/auth/oauth/google", json={"idToken": "valid"})
+        response = await client.post(
+            "/v1/auth/oauth/google", json={"idToken": "valid-google-id-token"}
+        )
         if response.status_code == 200:
             assert response.json()["user"]["id"] != victim_id

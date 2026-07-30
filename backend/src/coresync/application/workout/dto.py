@@ -61,7 +61,7 @@ class SessionSetDTO:
     distance_m: Decimal | None
     rpe: Decimal | None
     is_completed: bool
-    estimated_1rm: Decimal | None
+    estimated_one_rep_max: Decimal | None
     completed_at: datetime | None
 
 

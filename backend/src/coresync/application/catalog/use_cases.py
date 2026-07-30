@@ -105,7 +105,7 @@ def _set_history_dto(entry: SessionSet) -> SetHistoryDTO:
         distance_m=entry.distance_m,
         rpe=entry.rpe,
         is_completed=entry.is_completed,
-        estimated_1rm=entry.estimated_one_rep_max,
+        estimated_one_rep_max=entry.estimated_one_rep_max,
     )
 
 
@@ -251,7 +251,7 @@ class GetExerciseHistoryUseCase:
             total_sessions=stat.total_sessions if stat else len(entries),
             total_sets=stat.total_sets if stat else sum(len(e.sets) for e in entries),
             total_volume_kg=stat.total_volume_kg if stat else Decimal("0"),
-            best_est_1rm=stat.best_est_1rm if stat else None,
+            best_estimated_one_rep_max=stat.best_est_1rm if stat else None,
             last_performed_on=stat.last_performed_on if stat else None,
             sessions=[
                 ExerciseHistorySessionDTO(

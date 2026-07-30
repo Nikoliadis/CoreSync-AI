@@ -7,6 +7,7 @@ constraints and partial indexes carry correctness guarantees a fake cannot repro
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from collections.abc import AsyncIterator, Iterator
@@ -25,6 +26,12 @@ from coresync.core.security import JwtService, PasswordHasherService
 from coresync.domain.identity.entities import AuthProvider
 from coresync.domain.identity.policies import PasswordPolicy
 from coresync.domain.profile.services import TdeeCalculator
+from coresync.domain.progress.services import (
+    GoalProjector,
+    MeasurementTrendCalculator,
+    WeightTrendCalculator,
+)
+from coresync.domain.workout.services import PersonalRecordDetector, VolumeCalculator
 from coresync.infrastructure.database.session import Database
 from coresync.presentation.dependencies import AppContainer
 from coresync.presentation.main import create_app
@@ -41,9 +48,27 @@ API_ROOT = Path(__file__).resolve().parents[2]
 pytestmark = pytest.mark.integration
 
 
+def subprocess_env(database_url: str) -> dict[str, str]:
+    """The parent environment with the database settings overridden.
+
+    Not a minimal env: on Windows, stripping ``PATH`` and ``SystemRoot`` stops Winsock
+    from initialising and the child dies with ``WinError 10106`` before it runs any of our
+    code. Overriding the keys that matter achieves the actual goal — the child must not
+    inherit a developer's real ``DATABASE_URL`` — without breaking the interpreter.
+    """
+    return {
+        **os.environ,
+        "DATABASE_URL": database_url,
+        "ENVIRONMENT": "test",
+        "JWT_SECRET_KEY": "integration-test-secret-key-32-bytes!",
+    }
+
+
 @pytest.fixture(scope="session")
 def postgres_url() -> Iterator[str]:
-    from testcontainers.postgres import PostgresContainer
+    # `testcontainers.postgres` is deprecated and emits a DeprecationWarning, which
+    # `filterwarnings = ["error"]` turns into a fixture error.
+    from testcontainers.community.postgres import PostgresContainer
 
     with PostgresContainer("pgvector/pgvector:pg16", driver="asyncpg") as container:
         url = container.get_connection_url()
@@ -53,7 +78,7 @@ def postgres_url() -> Iterator[str]:
             [sys.executable, "-m", "alembic", "upgrade", "head"],
             cwd=API_ROOT,
             check=True,
-            env={"DATABASE_URL": url, "ENVIRONMENT": "test", "PATH": ""},
+            env=subprocess_env(url),
         )
         yield url
 
@@ -110,10 +135,17 @@ async def container(
         hasher=PasswordHasherService(api_settings),
         password_policy=PasswordPolicy(),
         tdee_calculator=TdeeCalculator(),
+        # The domain services are pure and deterministic, so the real ones are used
+        # rather than doubles — substituting them would test the double, not the rules.
+        pr_detector=PersonalRecordDetector(),
+        volume_calculator=VolumeCalculator(),
+        weight_trend_calculator=WeightTrendCalculator(),
+        measurement_trend_calculator=MeasurementTrendCalculator(),
+        goal_projector=GoalProjector(),
         email_sender=email_sender,
         revocation_store=FakeRevocationStore(),
         rate_limiter=FakeRateLimiter(),
-        breach_checker=FakeBreachChecker({"breached-password-123"}),
+        breach_checker=FakeBreachChecker({"leaked-passphrase-alpha"}),
         oidc_verifiers={
             AuthProvider.GOOGLE: google_verifier,
             AuthProvider.APPLE: FakeOidcVerifier(),
@@ -149,12 +181,7 @@ def seeded_catalog(postgres_url: str) -> None:
         [sys.executable, "-m", "coresync.infrastructure.seed.runner"],
         cwd=API_ROOT,
         check=True,
-        env={
-            "DATABASE_URL": postgres_url,
-            "ENVIRONMENT": "test",
-            "JWT_SECRET_KEY": "integration-test-secret-key-32-bytes!",
-            "PATH": "",
-        },
+        env=subprocess_env(postgres_url),
     )
 
 

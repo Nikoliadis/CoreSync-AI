@@ -20,6 +20,9 @@ from uuid import UUID
 from coresync.core.ids import uuid7
 
 _ZERO = Decimal("0")
+# Volume is stored as numeric(12,2); a session that has logged nothing must report the
+# same shape as one that has, or the client sees the value change on first refresh.
+_ZERO_VOLUME = Decimal("0.00")
 
 
 class SetType(StrEnum):
@@ -362,7 +365,7 @@ class WorkoutSession:
     notes: str | None = None
     completed_at: datetime | None = None
     duration_seconds: int | None = None
-    total_volume_kg: Decimal = _ZERO
+    total_volume_kg: Decimal = _ZERO_VOLUME
     total_sets: int = 0
     total_reps: int = 0
     perceived_effort: int | None = None
@@ -462,7 +465,12 @@ class WorkoutSession:
         counted = [s for s in self.all_sets if s.counts_toward_records]
         self.total_sets = len(counted)
         self.total_reps = sum(s.reps or 0 for s in counted)
-        self.total_volume_kg = sum((s.volume_kg for s in counted), _ZERO)
+        # Quantised to the column scale so the value a write returns matches the one a
+        # later read produces. Otherwise the same session reports "0" now and "0.00"
+        # after a refresh.
+        self.total_volume_kg = sum((s.volume_kg for s in counted), _ZERO).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
 
     def complete(self, *, at: datetime, perceived_effort: int | None = None) -> None:
         if self.status is not SessionStatus.IN_PROGRESS:

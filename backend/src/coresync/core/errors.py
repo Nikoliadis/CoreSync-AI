@@ -124,6 +124,23 @@ class EmailNotVerifiedError(ForbiddenError):
     user_message = "Please verify your email address first."
 
 
+class ProviderEmailUnverifiedError(ForbiddenError):
+    """The identity provider did not assert that it verified the address.
+
+    Refused unconditionally, whether or not a local account exists. Two reasons: creating
+    an account from it would record an unverified address as verified, and linking to an
+    existing one is an account-takeover path — register an unverified account with
+    someone's address, then sign in through the provider and inherit theirs. Behaving
+    identically in both cases also keeps this from being a user-enumeration oracle.
+    """
+
+    code = "provider_email_unverified"
+    user_message = (
+        "Your provider has not verified that email address. Sign in with your password, "
+        "then link the account from settings."
+    )
+
+
 class WeakPasswordError(ValidationError):
     code = "weak_password"
     user_message = "Choose a stronger password."

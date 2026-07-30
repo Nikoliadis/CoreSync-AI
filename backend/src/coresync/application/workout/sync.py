@@ -240,7 +240,10 @@ class SyncWorkoutsUseCase:
                 completed_at=_optional_datetime(payload, "completedAt") or operation.at,
             )
         )
-        return {"setId": str(logged.id), "estimated1rm": _str_or_none(logged.estimated_1rm)}
+        return {
+            "setId": str(logged.id),
+            "estimatedOneRepMax": _str_or_none(logged.estimated_one_rep_max),
+        }
 
     async def _op_set_update(self, user_id: UUID, operation: SyncOperation) -> dict[str, Any]:
         payload = operation.payload

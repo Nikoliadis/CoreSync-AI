@@ -112,7 +112,7 @@ def _apply_tokens(
         access_token=result.tokens.access_token,
         expires_in=result.tokens.expires_in_seconds,
         refresh_token=None if web else result.tokens.refresh_token,
-        user=AuthenticatedUserResponse(**vars(result.user)),
+        user=AuthenticatedUserResponse.model_validate(result.user),
         is_new_user=result.is_new_user,
         requires_onboarding=result.requires_onboarding,
     )

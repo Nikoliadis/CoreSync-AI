@@ -145,7 +145,15 @@ class UpdateProfileUseCase:
             if cmd.display_name is not None:
                 profile.display_name = cmd.display_name.strip()
             if cmd.date_of_birth is not None:
-                profile.date_of_birth = cmd.date_of_birth
+                user = await self._uow.users.get_by_id(cmd.user_id)
+                today = local_date_for(self._clock.now(), user.timezone if user else "UTC")
+                try:
+                    profile.set_date_of_birth(cmd.date_of_birth, today=today)
+                except ValueError as exc:
+                    raise ValidationError(
+                        str(exc),
+                        details=[{"field": "dateOfBirth", "code": "invalid", "message": str(exc)}],
+                    ) from exc
             if cmd.gender is not None:
                 profile.gender = Gender(cmd.gender)
             if cmd.height_cm is not None:
@@ -218,7 +226,13 @@ class CompleteOnboardingUseCase:
             if profile is None:
                 raise NotFoundError("profile", cmd.user_id)
 
-            profile.date_of_birth = cmd.date_of_birth
+            try:
+                profile.set_date_of_birth(cmd.date_of_birth, today=today)
+            except ValueError as exc:
+                raise ValidationError(
+                    str(exc),
+                    details=[{"field": "dateOfBirth", "code": "invalid", "message": str(exc)}],
+                ) from exc
             profile.gender = Gender(cmd.gender)
             profile.height_cm = cmd.height_cm
             profile.activity_level = ActivityLevel(cmd.activity_level)
@@ -307,6 +321,16 @@ class CompleteOnboardingUseCase:
         Never an UPDATE in place: the history is what lets the coach answer "was I
         actually in a deficit in March?" (docs/03 §4).
         """
+        # Quantised to the column scales before storing. The response to a write is built
+        # from this in-memory entity while every later read comes back through the
+        # database, so without this the same target reads as "2340" now and "2340.00"
+        # after a refresh — a number that appears to change on its own.
+        calories = calories.quantize(Decimal("0.01"))
+        protein_g = protein_g.quantize(Decimal("0.001"))
+        carbs_g = carbs_g.quantize(Decimal("0.001"))
+        fat_g = fat_g.quantize(Decimal("0.001"))
+        fiber_g = fiber_g.quantize(Decimal("0.001")) if fiber_g is not None else None
+        water_ml = water_ml.quantize(Decimal("0.01"))
         current = await self._uow.targets.get_current(user_id)
         if current is not None:
             if current.effective_from == today:
