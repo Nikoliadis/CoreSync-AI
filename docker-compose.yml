@@ -7,7 +7,7 @@ name: coresync
 x-api-base: &api-base
   build:
     context: .
-    dockerfile: infra/docker/api.Dockerfile
+    dockerfile: docker/api.Dockerfile
     target: development
   env_file: .env
   environment:
@@ -20,7 +20,7 @@ x-api-base: &api-base
     SMTP_HOST: mailhog
     SMTP_PORT: 1025
   volumes:
-    - ./apps/api:/app
+    - ./backend:/app
   depends_on:
     postgres:
       condition: service_healthy
@@ -38,7 +38,7 @@ services:
     ports: ["5432:5432"]
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./infra/docker/postgres-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+      - ./database/init/01-extensions.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U coresync -d coresync"]
       interval: 5s
@@ -95,13 +95,13 @@ services:
   web:
     build:
       context: .
-      dockerfile: infra/docker/web.Dockerfile
+      dockerfile: docker/web.Dockerfile
       target: development
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
     ports: ["3000:3000"]
     volumes:
-      - ./apps/web:/app
+      - ./frontend:/app
       - /app/node_modules
     depends_on: [api]
 

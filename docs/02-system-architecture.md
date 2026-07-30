@@ -372,7 +372,7 @@ app create records before it ever reaches the server — essential for the WAL s
 **Decision.** kg, cm, ml, kcal, grams in the database. `numeric`, never `float`.
 **Why.** Mixed-unit storage makes every aggregation a bug waiting to happen (the Mars Climate
 Orbiter problem). Floats make `SUM(calories)` drift.
-**Cost.** Clients must convert. Handled once in a shared `packages/ui` utility.
+**Cost.** Clients must convert. Handled once in a shared `frontend/src/lib/units` utility.
 
 ---
 

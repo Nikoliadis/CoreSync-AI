@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# Build context is the repository root so that packages/ can be copied in later phases.
+# Build context is the repository root so sibling directories can be copied in later phases.
 
 FROM python:3.12-slim AS base
 ENV PYTHONUNBUFFERED=1 \
@@ -16,7 +16,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # ---- dependency layer -------------------------------------------------------
 # Cached independently of source, so a code change rebuilds in seconds.
 FROM base AS deps
-COPY apps/api/pyproject.toml apps/api/uv.lock* ./
+COPY backend/pyproject.toml backend/uv.lock* ./
 RUN uv sync --frozen --no-install-project --no-dev 2>/dev/null \
     || uv sync --no-install-project --no-dev
 
@@ -24,7 +24,7 @@ RUN uv sync --frozen --no-install-project --no-dev 2>/dev/null \
 FROM deps AS development
 RUN uv sync --no-install-project
 ENV PATH="/app/.venv/bin:$PATH" PYTHONPATH=/app/src
-COPY apps/api/ .
+COPY backend/ .
 EXPOSE 8000
 CMD ["uvicorn", "coresync.presentation.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
@@ -33,9 +33,9 @@ FROM base AS production
 RUN groupadd -r app && useradd -r -g app -u 10001 -d /app app
 COPY --from=deps /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH" PYTHONPATH=/app/src
-COPY --chown=app:app apps/api/src ./src
-COPY --chown=app:app apps/api/migrations ./migrations
-COPY --chown=app:app apps/api/alembic.ini ./
+COPY --chown=app:app backend/src ./src
+COPY --chown=app:app backend/migrations ./migrations
+COPY --chown=app:app backend/alembic.ini ./
 USER app
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \

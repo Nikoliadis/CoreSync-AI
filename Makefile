@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-API := apps/api
+API := backend
 UV := uv --directory $(API)
 
 .PHONY: help
@@ -95,7 +95,7 @@ check: lint test-unit ## What CI runs on a PR, minus the database tests
 
 # --------------------------------------------------------------------- utility
 .PHONY: openapi
-openapi: ## Export the OpenAPI spec to apps/api/openapi.json
+openapi: ## Export the OpenAPI spec to backend/openapi.json
 	@cd $(API) && uv run python -c "import json; \
 from coresync.core.config import Settings; \
 from coresync.presentation.main import create_app; \

@@ -23,7 +23,7 @@ produces realistic volumes with synthetic identities.
 ## 2. Containers
 
 ```dockerfile
-# infra/docker/api.Dockerfile
+# docker/api.Dockerfile
 FROM python:3.12-slim AS base
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
@@ -32,12 +32,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # ---- dependency layer: cached unless the lockfile changes ----
 FROM base AS deps
-COPY apps/api/pyproject.toml apps/api/uv.lock ./
+COPY backend/pyproject.toml backend/uv.lock ./
 RUN pip install uv && uv sync --frozen --no-dev
 
 FROM deps AS development
 RUN uv sync --frozen                       # includes dev dependencies
-COPY apps/api/ .
+COPY backend/ .
 CMD ["uvicorn", "coresync.presentation.main:app", "--host", "0.0.0.0", "--reload"]
 
 # ---- production: minimal, non-root, read-only ----
@@ -45,9 +45,9 @@ FROM base AS production
 RUN groupadd -r app && useradd -r -g app -u 10001 app
 COPY --from=deps /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
-COPY --chown=app:app apps/api/src ./src
-COPY --chown=app:app apps/api/migrations ./migrations
-COPY --chown=app:app apps/api/alembic.ini ./
+COPY --chown=app:app backend/src ./src
+COPY --chown=app:app backend/migrations ./migrations
+COPY --chown=app:app backend/alembic.ini ./
 USER app
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
@@ -100,7 +100,7 @@ graph LR
 name: API CI
 on:
   pull_request:
-    paths: ['apps/api/**', 'packages/**', '.github/workflows/api-ci.yml']
+    paths: ['backend/**', '.github/workflows/api-ci.yml']
 
 concurrency:
   group: api-ci-${{ github.ref }}
@@ -151,9 +151,9 @@ jobs:
     steps:
       - run: uv run python -m coresync.cli export-openapi > openapi.json
       - run: npx oasdiff breaking origin-openapi.json openapi.json   # fails on breaking change
-      - run: npx openapi-typescript openapi.json -o packages/shared-types/api.ts
+      - run: npx openapi-typescript openapi.json -o frontend/src/lib/api-types/api.ts
       - name: Fail if generated types are stale
-        run: git diff --exit-code packages/shared-types/
+        run: git diff --exit-code frontend/src/lib/api-types/
 ```
 
 ### 3.2 Deployment workflow
@@ -161,7 +161,7 @@ jobs:
 ```yaml
 # .github/workflows/api-deploy.yml (abridged)
 on:
-  push: { branches: [main], paths: ['apps/api/**'] }
+  push: { branches: [main], paths: ['backend/**'] }
 
 jobs:
   build:
@@ -170,7 +170,7 @@ jobs:
         with: { client-id: ${{ vars.AZURE_CLIENT_ID }},      # OIDC federation
                 tenant-id: ${{ vars.AZURE_TENANT_ID }},      # no stored credentials
                 subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }} }
-      - run: az acr build -r coresync -t api:${{ github.sha }} -f infra/docker/api.Dockerfile .
+      - run: az acr build -r coresync -t api:${{ github.sha }} -f docker/api.Dockerfile .
 
   migrate:
     needs: build
@@ -188,10 +188,10 @@ jobs:
     steps:
       - run: az webapp config container set -n coresync-api -g coresync-prod \
                --slot staging --docker-custom-image-name coresync.azurecr.io/api:${{ github.sha }}
-      - run: ./infra/scripts/wait-healthy.sh https://coresync-api-staging.azurewebsites.net
-      - run: ./infra/scripts/smoke-test.sh https://coresync-api-staging.azurewebsites.net
+      - run: ./scripts/wait-healthy.sh https://coresync-api-staging.azurewebsites.net
+      - run: ./scripts/smoke-test.sh https://coresync-api-staging.azurewebsites.net
       - run: az webapp deployment slot swap -n coresync-api -g coresync-prod --slot staging
-      - run: ./infra/scripts/watch-error-budget.sh 15m   # auto-swaps back on regression
+      - run: ./scripts/watch-error-budget.sh 15m   # auto-swaps back on regression
 ```
 
 **Federated OIDC credentials, not stored secrets.** GitHub authenticates to Azure with a
@@ -276,7 +276,7 @@ graph TB
 > driving cost (roughly Phase 6), keeping the API on App Service. The container image is
 > identical, so the migration is configuration, not code.
 
-Infrastructure is defined in Bicep under `infra/bicep/` — modules per resource, parameter files
+Infrastructure is defined in Bicep under `scripts/azure/bicep/` — modules per resource, parameter files
 per environment, deployed by pipeline. No resource is created in the portal; anything created by
 hand is deleted by the next deployment, which is the point.
 

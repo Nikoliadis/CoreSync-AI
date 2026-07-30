@@ -51,23 +51,30 @@ Read in order. Each document is self-contained but assumes the previous ones.
 
 ```text
 CoreSync/
-├── apps/
-│   ├── api/            # FastAPI backend (Clean Architecture)
-│   ├── web/            # Next.js 15 web app
-│   ├── mobile/         # Expo / React Native app
-│   └── admin/          # Admin panel (Next.js route group or separate app)
-├── packages/
-│   ├── shared-types/   # OpenAPI-generated TS types shared by web + mobile
-│   ├── ui/             # Cross-platform design tokens & primitives
-│   └── config/         # Shared eslint / tsconfig / tailwind presets
-├── infra/
-│   ├── docker/         # Dockerfiles
-│   ├── bicep/          # Azure infrastructure as code
-│   └── scripts/        # Operational scripts
+├── backend/            # FastAPI API — Clean Architecture, Alembic migrations
+├── frontend/           # Next.js web app (+ admin/)
+├── mobile/             # Expo / React Native app
+├── ai/                 # Prompts, evaluation sets, retrieval corpus (not runtime code)
+├── database/           # Container init SQL and dev seeds
+├── docker/             # Dockerfiles
+├── nginx/              # Reverse proxy: TLS, HSTS, volumetric rate limits
 ├── docs/               # ← the blueprint (start here)
+├── scripts/            # Operational scripts (+ azure/bicep infrastructure as code)
 ├── .github/workflows/  # CI/CD pipelines
 └── docker-compose.yml  # Local development stack
 ```
+
+Two boundaries in that tree are deliberate and easy to get wrong:
+
+- **Alembic migrations live in `backend/migrations/`, not `database/`.** They import the
+  SQLAlchemy models to resolve `target_metadata`, so they are code versioned with the code
+  that depends on them. `database/` holds only SQL that runs *before* the application
+  exists. See [database/README.md](database/README.md).
+- **`ai/` holds content, not code.** The coach runs inside the API and reads user history
+  through the same repositories as every other feature; a separate service would need its
+  own copy of that data access for no benefit at this scale. What lives in `ai/` is the
+  material that should be reviewable without reading Python — prompts, evaluation sets,
+  knowledge sources. See [ai/README.md](ai/README.md).
 
 ## Tech stack
 

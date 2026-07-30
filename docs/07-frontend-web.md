@@ -30,7 +30,7 @@ in. The app shell is prefetched and cached; perceived load is dominated by the A
 ## 2. Folder structure
 
 ```text
-apps/web/
+frontend/
 ├── app/
 │   ├── (marketing)/                  # static, public
 │   │   ├── page.tsx                  # landing

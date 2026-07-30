@@ -43,7 +43,7 @@ cannot express, and the maintenance tax of managing Xcode/Gradle projects by han
 ## 3. Folder structure
 
 ```text
-apps/mobile/
+mobile/
 ├── app/                              # Expo Router — file-based navigation
 │   ├── _layout.tsx                   # root: providers, splash, auth gate, sync bootstrap
 │   ├── (auth)/
@@ -378,7 +378,7 @@ rather than a destination.
 
 | Shared | Not shared |
 |---|---|
-| `packages/shared-types` — OpenAPI-generated types | UI components (NativeWind ≠ Tailwind DOM) |
+| `frontend/src/lib/api-types` — OpenAPI-generated types | UI components (NativeWind ≠ Tailwind DOM) |
 | Zod validation schemas | Navigation |
 | Unit conversion, date/timezone helpers | Storage layer |
 | Business formatters (1RM, volume, macro maths) | Offline engine (mobile only) |

@@ -86,7 +86,7 @@ One shape for every error, machine-readable first:
 ```
 
 Clients branch on `code`, never on `message`. The full code registry lives in
-`apps/api/src/coresync/core/errors.py` and is published in the OpenAPI spec.
+`backend/src/coresync/core/errors.py` and is published in the OpenAPI spec.
 
 | Code | HTTP | Meaning |
 |---|---|---|
@@ -500,7 +500,7 @@ its error responses and an example. CI then:
 1. Generates `openapi.json`.
 2. Runs **Schemathesis** property-based tests against the spec (fuzzes every endpoint for
    contract violations and unhandled 500s).
-3. Generates TypeScript types into `packages/shared-types` via `openapi-typescript`.
+3. Generates TypeScript types into `frontend/src/lib/api-types` via `openapi-typescript`.
 4. Fails the build if the diff against the previous release contains a **breaking** change
    without a version bump (`oasdiff` in breaking-change mode).
 

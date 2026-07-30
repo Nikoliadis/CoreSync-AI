@@ -2,10 +2,10 @@ name: API CI
 
 on:
   pull_request:
-    paths: ["apps/api/**", ".github/workflows/api-ci.yml"]
+    paths: ["backend/**", ".github/workflows/api-ci.yml"]
   push:
     branches: [main]
-    paths: ["apps/api/**"]
+    paths: ["backend/**"]
 
 concurrency:
   # A new push supersedes an in-flight run for the same ref.
@@ -14,7 +14,7 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.12"
-  WORKING_DIR: apps/api
+  WORKING_DIR: backend
 
 jobs:
   quality:
@@ -134,7 +134,7 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
-          scan-ref: apps/api
+          scan-ref: backend
           severity: "HIGH,CRITICAL"
           exit-code: "1"
 
@@ -167,7 +167,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           git fetch origin ${{ github.base_ref }} --depth=1
-          git show origin/${{ github.base_ref }}:apps/api/openapi.json > base.json 2>/dev/null || exit 0
+          git show origin/${{ github.base_ref }}:backend/openapi.json > base.json 2>/dev/null || exit 0
           npx --yes oasdiff breaking base.json openapi.json --fail-on ERR
 
       - uses: actions/upload-artifact@v4

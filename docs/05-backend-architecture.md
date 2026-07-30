@@ -38,7 +38,7 @@ This is enforced mechanically, not by discipline — see §9.
 ## 2. Folder structure
 
 ```text
-apps/api/
+backend/
 ├── pyproject.toml                # uv/poetry, ruff, mypy, pytest config
 ├── alembic.ini
 ├── migrations/
