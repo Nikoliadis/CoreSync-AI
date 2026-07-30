@@ -26,6 +26,10 @@ from coresync.infrastructure.database.repositories.profile import (
 from coresync.infrastructure.database.repositories.progress import (
     SqlAlchemyWeightLogRepository,
 )
+from coresync.infrastructure.database.repositories.progress_body import (
+    SqlAlchemyBodyMeasurementRepository,
+    SqlAlchemyProgressPhotoRepository,
+)
 from coresync.infrastructure.database.repositories.workout import (
     SqlAlchemyActivitySummaryRepository,
     SqlAlchemyExerciseStatisticsRepository,
@@ -74,6 +78,8 @@ class SqlAlchemyUnitOfWork:
         self.targets = SqlAlchemyNutritionTargetRepository(session)
         self.settings = SqlAlchemyUserSettingsRepository(session)
         self.weights = SqlAlchemyWeightLogRepository(session)
+        self.measurements = SqlAlchemyBodyMeasurementRepository(session)
+        self.photos = SqlAlchemyProgressPhotoRepository(session)
         self.exercises = SqlAlchemyExerciseRepository(session)
         self.catalog = SqlAlchemyCatalogReferenceRepository(session)
         self.routines = SqlAlchemyRoutineRepository(session)

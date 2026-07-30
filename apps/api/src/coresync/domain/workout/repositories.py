@@ -57,6 +57,22 @@ class CalendarDay:
     workout_count: int
     total_volume_kg: Decimal
     duration_seconds: int
+    # Defaulted because the session-derived calendar can compute it, while some callers
+    # only need the heatmap's count and volume.
+    total_sets: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class MuscleVolumeDay:
+    """A day's tonnage split by muscle group, for the volume chart.
+
+    Separate from ``CalendarDay`` because the jsonb split is several times the size of the
+    scalar columns, and the calendar heatmap has no use for it.
+    """
+
+    local_date: date
+    volume_by_muscle_group: dict[str, Decimal]
+    total_sets: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,6 +215,10 @@ class ActivitySummaryRepository(Protocol):
     async def range(
         self, user_id: UUID, *, date_from: date, date_to: date
     ) -> list[CalendarDay]: ...
+
+    async def muscle_volume_range(
+        self, user_id: UUID, *, date_from: date, date_to: date
+    ) -> list[MuscleVolumeDay]: ...
 
 
 @dataclass(frozen=True, slots=True)

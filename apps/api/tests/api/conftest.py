@@ -135,7 +135,9 @@ async def client(api_settings: Settings, container: AppContainer) -> AsyncIterat
         yield http_client
 
 
-@pytest_asyncio.fixture(scope="session", autouse=True)
+# A plain pytest fixture, not pytest_asyncio: the body is synchronous, and
+# `pytest_asyncio.fixture` is only for async ones.
+@pytest.fixture(scope="session", autouse=True)
 def seeded_catalog(postgres_url: str) -> None:
     """Seed the exercise catalog once for the whole suite.
 

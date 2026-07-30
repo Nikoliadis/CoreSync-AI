@@ -67,6 +67,23 @@ from coresync.application.profile.use_cases import (
     UpdateProfileUseCase,
     UpdateSettingsUseCase,
 )
+from coresync.application.progress.measurements import (
+    DeleteMeasurementUseCase,
+    GetMeasurementSeriesUseCase,
+    ListMeasurementsUseCase,
+    LogMeasurementUseCase,
+)
+from coresync.application.progress.stats import (
+    GetDashboardUseCase,
+    GetFrequencyUseCase,
+    GetVolumeByMuscleGroupUseCase,
+    ListAllRecordsUseCase,
+)
+from coresync.application.progress.weight import (
+    DeleteWeightLogUseCase,
+    GetWeightSeriesUseCase,
+    LogWeightUseCase,
+)
 from coresync.application.workout.routines import (
     AdoptTemplateUseCase,
     CreateRoutineUseCase,
@@ -110,6 +127,11 @@ from coresync.core.security import JwtService, PasswordHasherService
 from coresync.domain.identity.entities import AuthProvider
 from coresync.domain.identity.policies import PasswordPolicy
 from coresync.domain.profile.services import TdeeCalculator
+from coresync.domain.progress.services import (
+    GoalProjector,
+    MeasurementTrendCalculator,
+    WeightTrendCalculator,
+)
 from coresync.domain.workout.services import PersonalRecordDetector, VolumeCalculator
 from coresync.infrastructure.database.session import Database
 from coresync.infrastructure.database.unit_of_work import SqlAlchemyUnitOfWork
@@ -132,6 +154,9 @@ class AppContainer:
     tdee_calculator: TdeeCalculator
     pr_detector: PersonalRecordDetector
     volume_calculator: VolumeCalculator
+    weight_trend_calculator: WeightTrendCalculator
+    measurement_trend_calculator: MeasurementTrendCalculator
+    goal_projector: GoalProjector
     email_sender: EmailSender
     revocation_store: TokenRevocationStore
     rate_limiter: RateLimiter
@@ -458,6 +483,62 @@ def delete_session_use_case(uow: Uow) -> DeleteSessionUseCase:
     return DeleteSessionUseCase(uow)
 
 
+# ------------------------------------------------------------------ progress
+def log_weight_use_case(c: Container, uow: Uow) -> LogWeightUseCase:
+    return LogWeightUseCase(uow, c.weight_trend_calculator, c.clock)
+
+
+def weight_series_use_case(c: Container, uow: Uow) -> GetWeightSeriesUseCase:
+    return GetWeightSeriesUseCase(uow, c.weight_trend_calculator, c.goal_projector, c.clock)
+
+
+def delete_weight_use_case(c: Container, uow: Uow) -> DeleteWeightLogUseCase:
+    return DeleteWeightLogUseCase(uow, c.weight_trend_calculator)
+
+
+def log_measurement_use_case(c: Container, uow: Uow) -> LogMeasurementUseCase:
+    return LogMeasurementUseCase(uow, c.clock)
+
+
+def list_measurements_use_case(c: Container, uow: Uow) -> ListMeasurementsUseCase:
+    return ListMeasurementsUseCase(uow, c.clock)
+
+
+def measurement_series_use_case(c: Container, uow: Uow) -> GetMeasurementSeriesUseCase:
+    return GetMeasurementSeriesUseCase(uow, c.measurement_trend_calculator, c.clock)
+
+
+def delete_measurement_use_case(uow: Uow) -> DeleteMeasurementUseCase:
+    return DeleteMeasurementUseCase(uow)
+
+
+def volume_stats_use_case(c: Container, uow: Uow) -> GetVolumeByMuscleGroupUseCase:
+    return GetVolumeByMuscleGroupUseCase(uow, c.clock)
+
+
+def frequency_stats_use_case(c: Container, uow: Uow) -> GetFrequencyUseCase:
+    return GetFrequencyUseCase(uow, c.clock)
+
+
+def all_records_use_case(uow: Uow) -> ListAllRecordsUseCase:
+    return ListAllRecordsUseCase(uow)
+
+
+def dashboard_use_case(c: Container) -> GetDashboardUseCase:
+    """The weight series opens its own unit of work, so it gets its own instance.
+
+    Two sessions would otherwise be live over one connection while the dashboard
+    assembles its bundle.
+    """
+    return GetDashboardUseCase(
+        c.unit_of_work(),
+        GetWeightSeriesUseCase(
+            c.unit_of_work(), c.weight_trend_calculator, c.goal_projector, c.clock
+        ),
+        c.clock,
+    )
+
+
 def sync_use_case(c: Container) -> SyncWorkoutsUseCase:
     """Composed from the same use cases the online endpoints call.
 
@@ -512,6 +593,9 @@ def build_container(settings: Settings) -> AppContainer:
         tdee_calculator=TdeeCalculator(),
         pr_detector=PersonalRecordDetector(),
         volume_calculator=VolumeCalculator(),
+        weight_trend_calculator=WeightTrendCalculator(),
+        measurement_trend_calculator=MeasurementTrendCalculator(),
+        goal_projector=GoalProjector(),
         email_sender=SmtpEmailSender(settings)
         if settings.environment != "test"
         else ConsoleEmailSender(),

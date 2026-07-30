@@ -37,6 +37,10 @@ from coresync.infrastructure.database.models.profile import (
     ProfileModel,
 )
 from coresync.infrastructure.database.models.progress import WeightLogModel
+from coresync.infrastructure.database.models.progress_body import (
+    BodyMeasurementModel,
+    ProgressPhotoModel,
+)
 from coresync.infrastructure.database.models.workout import (
     PersonalRecordModel,
     RoutineExerciseModel,
@@ -51,6 +55,7 @@ from coresync.infrastructure.database.models.workout import (
 __all__ = [
     "AuthIdentityModel",
     "Base",
+    "BodyMeasurementModel",
     "DailyActivitySummaryModel",
     "EquipmentModel",
     "ExerciseCategoryModel",
@@ -66,6 +71,7 @@ __all__ = [
     "NutritionTargetModel",
     "PersonalRecordModel",
     "ProfileModel",
+    "ProgressPhotoModel",
     "RefreshTokenModel",
     "RoutineExerciseModel",
     "RoutineModel",

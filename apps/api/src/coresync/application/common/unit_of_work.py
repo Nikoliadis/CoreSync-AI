@@ -27,7 +27,11 @@ from coresync.domain.profile.repositories import (
     ProfileRepository,
     UserSettingsRepository,
 )
-from coresync.domain.progress.repositories import WeightLogRepository
+from coresync.domain.progress.repositories import (
+    BodyMeasurementRepository,
+    ProgressPhotoRepository,
+    WeightLogRepository,
+)
 from coresync.domain.workout.repositories import (
     ActivitySummaryRepository,
     ExerciseStatisticsRepository,
@@ -50,6 +54,8 @@ class UnitOfWork(Protocol):
     targets: NutritionTargetRepository
     settings: UserSettingsRepository
     weights: WeightLogRepository
+    measurements: BodyMeasurementRepository
+    photos: ProgressPhotoRepository
     exercises: ExerciseRepository
     catalog: CatalogReferenceRepository
     routines: RoutineRepository

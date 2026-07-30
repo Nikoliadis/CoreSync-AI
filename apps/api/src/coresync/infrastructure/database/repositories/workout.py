@@ -28,6 +28,7 @@ from coresync.domain.workout.repositories import (
     CalendarDay,
     ExerciseHistoryEntry,
     ExerciseStatistics,
+    MuscleVolumeDay,
     SessionSummary,
     StaleVersionError,
     Streak,
@@ -627,6 +628,36 @@ class SqlAlchemyActivitySummaryRepository:
         await self._session.execute(stmt)
         await self._session.flush()
 
+    async def muscle_volume_range(
+        self, user_id: UUID, *, date_from: date, date_to: date
+    ) -> list[MuscleVolumeDay]:
+        stmt = (
+            select(
+                DailyActivitySummaryModel.local_date,
+                DailyActivitySummaryModel.volume_by_muscle_group,
+                DailyActivitySummaryModel.total_sets,
+            )
+            .where(
+                DailyActivitySummaryModel.user_id == user_id,
+                DailyActivitySummaryModel.local_date >= date_from,
+                DailyActivitySummaryModel.local_date <= date_to,
+            )
+            .order_by(DailyActivitySummaryModel.local_date)
+        )
+        days: list[MuscleVolumeDay] = []
+        for on, split, sets in (await self._session.execute(stmt)).all():
+            # The jsonb stores decimals as strings so summing stays exact.
+            days.append(
+                MuscleVolumeDay(
+                    local_date=on,
+                    volume_by_muscle_group={
+                        group: Decimal(str(value)) for group, value in (split or {}).items()
+                    },
+                    total_sets=int(sets or 0),
+                )
+            )
+        return days
+
     async def range(self, user_id: UUID, *, date_from: date, date_to: date) -> list[CalendarDay]:
         stmt = (
             select(DailyActivitySummaryModel)
@@ -644,6 +675,7 @@ class SqlAlchemyActivitySummaryRepository:
                 workout_count=m.workout_count,
                 total_volume_kg=m.total_volume_kg,
                 duration_seconds=m.duration_seconds,
+                total_sets=m.total_sets,
             )
             for m in rows
         ]
