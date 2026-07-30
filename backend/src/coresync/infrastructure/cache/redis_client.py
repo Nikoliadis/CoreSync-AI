@@ -8,8 +8,12 @@ from typing import Any
 from uuid import UUID
 
 from redis.asyncio import ConnectionPool, Redis
+from redis.exceptions import RedisError
 
 from coresync.core.config import Settings
+from coresync.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def create_redis(settings: Settings) -> Redis:
@@ -50,6 +54,13 @@ class RedisRateLimiter:
     password-reset throttling the extra precision buys nothing — the window boundary
     just means an attacker gets 2N attempts across a boundary instead of N, which is
     still far below what credential stuffing needs.
+
+    **Unavailability fails open.** If Redis cannot be reached the request is allowed and
+    a warning is logged. A rate limiter is a fairness mechanism, not an authorisation
+    one: making every endpoint return 500 because the counter store is unreachable turns
+    a degraded dependency into a total outage, which is the failure mode the liveness /
+    readiness split exists to avoid. Readiness already reports Redis as down, so the loss
+    of limiting is visible to alerting rather than silent.
     """
 
     _PREFIX = "rl:"
@@ -61,19 +72,29 @@ class RedisRateLimiter:
         redis_key = f"{self._PREFIX}{key}"
         seconds = int(window.total_seconds())
 
-        pipe = self._redis.pipeline()
-        pipe.incr(redis_key)
-        pipe.ttl(redis_key)
-        count, ttl = await pipe.execute()
+        try:
+            pipe = self._redis.pipeline()
+            pipe.incr(redis_key)
+            pipe.ttl(redis_key)
+            count, ttl = await pipe.execute()
 
-        if ttl < 0:  # first hit in this window, or TTL was lost
-            await self._redis.expire(redis_key, seconds)
-            ttl = seconds
+            if ttl < 0:  # first hit in this window, or TTL was lost
+                await self._redis.expire(redis_key, seconds)
+                ttl = seconds
+        except (RedisError, OSError) as exc:
+            # Deliberately not re-raised. See the class docstring.
+            logger.warning("rate_limiter_unavailable", error=type(exc).__name__, failing_open=True)
+            return True, 0
 
         return count <= limit, int(ttl)
 
     async def reset(self, key: str) -> None:
-        await self._redis.delete(f"{self._PREFIX}{key}")
+        try:
+            await self._redis.delete(f"{self._PREFIX}{key}")
+        except (RedisError, OSError) as exc:
+            # Reset is a best-effort courtesy — clearing a counter after a successful
+            # login, for instance. Failing it must not fail the operation that asked.
+            logger.warning("rate_limiter_reset_failed", error=type(exc).__name__)
 
 
 class CacheService:

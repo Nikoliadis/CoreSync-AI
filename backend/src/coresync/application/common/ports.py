@@ -67,7 +67,16 @@ class OidcVerifier(Protocol):
 
 class RateLimiter(Protocol):
     async def hit(self, key: str, *, limit: int, window: timedelta) -> tuple[bool, int]:
-        """Register an attempt. Returns ``(allowed, seconds_until_reset)``."""
+        """Register an attempt. Returns ``(allowed, seconds_until_reset)``.
+
+        **An implementation that cannot reach its counter store must allow the request**
+        rather than raise. Rate limiting is fairness, not authorisation: refusing every
+        request because the counter store is unreachable converts a degraded dependency
+        into a total outage. Readiness reports the store separately, so the lost limiting
+        is visible to alerting instead of silent.
+        """
         ...
 
-    async def reset(self, key: str) -> None: ...
+    async def reset(self, key: str) -> None:
+        """Clear a counter. Best-effort — failure must not fail the caller's operation."""
+        ...
