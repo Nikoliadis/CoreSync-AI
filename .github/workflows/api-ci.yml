@@ -1,11 +1,14 @@
 name: API CI
 
 on:
+  # Both triggers watch the same paths, including this file. When the push filter omitted
+  # it, a commit that changed only the workflow ran no checks at all — the commit showed
+  # no status rather than a red one, and a broken pipeline could land on main unnoticed.
   pull_request:
     paths: ["backend/**", ".github/workflows/api-ci.yml"]
   push:
     branches: [main]
-    paths: ["backend/**"]
+    paths: ["backend/**", ".github/workflows/api-ci.yml"]
 
 concurrency:
   # A new push supersedes an in-flight run for the same ref.
