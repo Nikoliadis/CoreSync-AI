@@ -25,10 +25,13 @@ from coresync.infrastructure.external.llm.router import estimate_cost_usd
 class ScriptedGateway:
     """Returns queued responses in order, recording every request it received."""
 
-    def __init__(self, responses: Sequence[CompletionResponse] | None = None) -> None:
+    def __init__(
+        self, responses: Sequence[CompletionResponse] | None = None, *, chunk_size: int = 4
+    ) -> None:
         self._queue: list[CompletionResponse] = list(responses or [])
         self.requests: list[CompletionRequest] = []
         self.failure: Exception | None = None
+        self.chunk_size = chunk_size
 
     def queue(self, response: CompletionResponse) -> ScriptedGateway:
         self._queue.append(response)
@@ -51,13 +54,38 @@ class ScriptedGateway:
         return self._queue.pop(0)
 
     async def stream(self, request: CompletionRequest) -> AsyncIterator[CompletionChunk]:
+        """Emits the queued reply as small deltas, the way a provider would.
+
+        Chunking matters: a fake that yields the whole answer in one piece would let a
+        guard bug through, because the streaming guard's holdback only does anything
+        once text arrives in pieces.
+        """
         response = await self.complete(request)
-        yield CompletionChunk(delta=response.content, model=response.model)
+
+        if response.tool_calls:
+            # A tool round emits no visible text — the model is asking, not answering.
+            yield CompletionChunk(
+                is_final=True,
+                model=response.model,
+                prompt_tokens=response.prompt_tokens,
+                completion_tokens=response.completion_tokens,
+                tool_calls=response.tool_calls,
+                finish_reason="tool_calls",
+            )
+            return
+
+        for index in range(0, len(response.content), self.chunk_size):
+            yield CompletionChunk(
+                delta=response.content[index : index + self.chunk_size],
+                model=response.model,
+            )
+
         yield CompletionChunk(
             is_final=True,
             model=response.model,
             prompt_tokens=response.prompt_tokens,
             completion_tokens=response.completion_tokens,
+            finish_reason=response.finish_reason,
         )
 
     def model_for(self, task_class: TaskClass) -> str:

@@ -90,7 +90,12 @@ class AzureOpenAIGateway:
         payload = self._build_payload(request, stream=True)
         url = self._url(deployment)
 
-        prompt_tokens = completion_tokens = 0
+        prompt_tokens = completion_tokens = cached_tokens = 0
+        finish_reason = ""
+        # Tool calls arrive as fragments keyed by index: the id and name land in the
+        # first fragment and the JSON arguments accumulate across many. Reassembled
+        # here so the caller receives whole, executable calls.
+        fragments: dict[int, dict[str, str]] = {}
         try:
             async with self._client.stream(
                 "POST", url, json=payload, timeout=self._timeout
@@ -116,11 +121,32 @@ class AzureOpenAIGateway:
                     if usage:
                         prompt_tokens = usage.get("prompt_tokens", prompt_tokens)
                         completion_tokens = usage.get("completion_tokens", completion_tokens)
+                        cached_tokens = (usage.get("prompt_tokens_details") or {}).get(
+                            "cached_tokens", cached_tokens
+                        )
 
                     for choice in event.get("choices", ()):
-                        delta = (choice.get("delta") or {}).get("content")
-                        if delta:
-                            yield CompletionChunk(delta=delta, model=deployment)
+                        if choice.get("finish_reason"):
+                            finish_reason = choice["finish_reason"]
+
+                        delta = choice.get("delta") or {}
+
+                        content = delta.get("content")
+                        if content:
+                            yield CompletionChunk(delta=content, model=deployment)
+
+                        for call in delta.get("tool_calls") or ():
+                            index = call.get("index", 0)
+                            fragment = fragments.setdefault(
+                                index, {"id": "", "name": "", "arguments": ""}
+                            )
+                            if call.get("id"):
+                                fragment["id"] = call["id"]
+                            function = call.get("function") or {}
+                            if function.get("name"):
+                                fragment["name"] = function["name"]
+                            if function.get("arguments"):
+                                fragment["arguments"] += function["arguments"]
         except httpx.HTTPError as exc:
             raise UpstreamUnavailableError("the AI provider is unavailable") from exc
 
@@ -129,6 +155,9 @@ class AzureOpenAIGateway:
             model=deployment,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
+            cached_tokens=cached_tokens,
+            tool_calls=_parse_tool_fragments(fragments),
+            finish_reason=finish_reason or "stop",
         )
 
     # ----------------------------------------------------------------- internals
@@ -240,6 +269,31 @@ class AzureOpenAIEmbeddingGateway:
 
 
 # ------------------------------------------------------------------- parsing
+def _parse_tool_fragments(fragments: dict[int, dict[str, str]]) -> tuple[ToolInvocation, ...]:
+    """Turn reassembled streaming fragments into executable calls."""
+    calls: list[ToolInvocation] = []
+    for index in sorted(fragments):
+        fragment = fragments[index]
+        if not fragment["name"]:
+            continue
+        try:
+            arguments = json.loads(fragment["arguments"] or "{}")
+        except json.JSONDecodeError:
+            # A truncated argument object means the call cannot be executed. Recorded
+            # with empty arguments so the executor rejects it cleanly and the attempt
+            # still appears in the audit trail.
+            logger.warning("llm_bad_tool_arguments", tool=fragment["name"])
+            arguments = {}
+        calls.append(
+            ToolInvocation(
+                call_id=fragment["id"],
+                name=fragment["name"],
+                arguments=arguments if isinstance(arguments, dict) else {},
+            )
+        )
+    return tuple(calls)
+
+
 def _tool_payload(tool: ToolSpec) -> dict[str, Any]:
     return {
         "type": "function",

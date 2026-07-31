@@ -16,10 +16,11 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 import structlog
@@ -40,13 +41,20 @@ from coresync.domain.coaching.entities import (
     ToolCall,
     UsageRecord,
 )
-from coresync.domain.coaching.ports import CompletionRequest, CompletionResponse, LLMGateway
+from coresync.domain.coaching.ports import (
+    CompletionChunk,
+    CompletionRequest,
+    CompletionResponse,
+    LLMGateway,
+    ToolInvocation,
+)
 from coresync.domain.coaching.safety import (
     FALLBACK_RESPONSE,
     SAFE_RESPONSES,
     InputTriage,
     OutputGuard,
     SafetyCategory,
+    StreamingOutputGuard,
 )
 
 logger = structlog.get_logger(__name__)
@@ -88,6 +96,22 @@ class ChatCommand:
 class ChatQuota:
     daily_message_limit: int
     daily_cost_ceiling_usd: Decimal
+
+
+@dataclass(frozen=True, slots=True)
+class ChatStreamEvent:
+    """One step of a streamed turn.
+
+    ``delta`` appends; ``replace`` discards everything shown so far and substitutes
+    ``delta`` — the escape hatch the output guard needs, since text already on screen
+    cannot be unsent. ``message`` closes the turn with the persisted reply, so the
+    client ends up with the same object the non-streaming endpoint returns.
+    """
+
+    kind: Literal["delta", "replace", "tools", "message"]
+    delta: str = ""
+    tools: tuple[str, ...] = ()
+    reply: ChatReplyDTO | None = None
 
 
 class SendMessageUseCase:
@@ -322,6 +346,232 @@ class SendMessageUseCase:
             prompt_tokens=reply.prompt_tokens,
             completion_tokens=reply.completion_tokens,
         )
+
+    # ------------------------------------------------------------------ streaming
+    async def stream(self, command: ChatCommand) -> AsyncIterator[ChatStreamEvent]:
+        """The same turn, emitted token by token.
+
+        Deliberately shares every safety decision with :meth:`execute` — quota, then
+        triage, then the tool loop, then the output guard. A second code path for
+        streaming is how the two drift until one of them stops enforcing something.
+
+        The difference is the guard: it runs incrementally through
+        :class:`StreamingOutputGuard`, which withholds the tail of the text so nothing
+        is shown that a later token could turn into an unsafe pattern.
+        """
+        content = command.content.strip()
+        if not content:
+            raise ValidationError("A message cannot be empty.")
+        if len(content) > MAX_MESSAGE_LENGTH:
+            raise ValidationError(f"Messages are limited to {MAX_MESSAGE_LENGTH} characters.")
+
+        async with self._uow:
+            user = await self._uow.users.get_by_id(command.user_id)
+            if user is None:
+                raise NotFoundError("user", command.user_id)
+            today = command.local_date or local_date_for(self._clock.now(), user.timezone)
+
+            await self._enforce_quota(command.user_id, today)
+
+            conversation = await self._resolve_conversation(command, content)
+            user_message = Message.create(
+                conversation_id=conversation.id, role=MessageRole.USER, content=content
+            )
+            context = await self._assembler.build(command.user_id, today=today)
+
+            verdict = self._triage.screen_minor(content, age=context.profile.age)
+            if verdict.is_blocked and verdict.category is not None:
+                reply = await self._safe_reply(conversation, user_message, verdict.category)
+                await self._uow.commit()
+                # Scripted responses are not streamed. Revealing a crisis referral one
+                # word at a time would be a strange thing to do to someone in distress.
+                yield ChatStreamEvent(kind="message", reply=reply)
+                return
+
+            async for event in self._coach_streaming(
+                conversation, user_message, context, today=today
+            ):
+                yield event
+
+            await self._uow.commit()
+
+    async def _coach_streaming(
+        self,
+        conversation: Conversation,
+        user_message: Message,
+        context: CoachContext,
+        *,
+        today: date,
+    ) -> AsyncIterator[ChatStreamEvent]:
+        system_prompt = build_system_prompt(context)
+        history = await self._uow.messages.recent_for_context(
+            conversation.id, limit=self._context_message_limit
+        )
+        messages: list[dict[str, Any]] = [
+            {"role": m.role.value, "content": m.content} for m in history
+        ]
+        messages.append({"role": MessageRole.USER.value, "content": user_message.content})
+
+        tool_context = ToolContext(uow=self._uow, user_id=conversation.user_id, today=today)
+        tool_results: list[dict[str, Any]] = []
+        executed: list[ToolResult] = []
+        guard = StreamingOutputGuard(self._guard)
+        started = time.monotonic()
+
+        model = self._gateway.model_for(TaskClass.CHAT)
+        prompt_tokens = completion_tokens = cached_tokens = 0
+        blocked = False
+
+        for iteration in range(self._max_tool_iterations):
+            request = CompletionRequest(
+                system_prompt=system_prompt,
+                messages=messages,
+                task_class=TaskClass.CHAT,
+                tools=self._registry.specs,
+                tool_results=tuple(tool_results),
+            )
+
+            final: CompletionChunk | None = None
+            try:
+                async for chunk in self._gateway.stream(request):
+                    if chunk.is_final:
+                        final = chunk
+                        break
+
+                    if not chunk.delta:
+                        continue
+
+                    released, chunk_verdict = guard.push(chunk.delta)
+                    if chunk_verdict.must_regenerate:
+                        logger.warning(
+                            "ai_output_blocked",
+                            conversation_id=str(conversation.id),
+                            reasons=chunk_verdict.reasons,
+                        )
+                        blocked = True
+                        break
+                    if released:
+                        yield ChatStreamEvent(kind="delta", delta=released)
+            except Exception:
+                await self._uow.rollback()
+                await self._meter(
+                    conversation.user_id,
+                    model=model,
+                    response=None,
+                    started=started,
+                    status="error",
+                    today=today,
+                )
+                await self._uow.commit()
+                raise
+
+            if final is not None:
+                model = final.model or model
+                prompt_tokens += final.prompt_tokens
+                completion_tokens += final.completion_tokens
+                cached_tokens += final.cached_tokens
+
+            if blocked or final is None or not final.wants_tools:
+                break
+
+            # Tools were requested, so nothing user-visible was generated this round.
+            batch_results, batch = await self._run_tool_calls(final.tool_calls, tool_context)
+            tool_results = batch_results
+            executed.extend(batch)
+            yield ChatStreamEvent(kind="tools", tools=tuple(result.name for result in batch))
+
+            messages.append(
+                {
+                    "role": MessageRole.ASSISTANT.value,
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": call.call_id,
+                            "type": "function",
+                            "function": {
+                                "name": call.name,
+                                "arguments": json.dumps(call.arguments),
+                            },
+                        }
+                        for call in final.tool_calls
+                    ],
+                }
+            )
+            if iteration == self._max_tool_iterations - 1:
+                logger.warning("ai_tool_loop_exhausted", conversation_id=str(conversation.id))
+
+        if not blocked:
+            remainder, final_verdict = guard.finish()
+            if final_verdict.must_regenerate:
+                logger.warning(
+                    "ai_output_blocked",
+                    conversation_id=str(conversation.id),
+                    reasons=final_verdict.reasons,
+                )
+                blocked = True
+            elif remainder:
+                yield ChatStreamEvent(kind="delta", delta=remainder)
+
+        content = guard.text
+        if blocked or not content.strip():
+            # Whatever was already shown is replaced wholesale. The withheld tail means
+            # the unsafe fragment itself never reached the client.
+            content = FALLBACK_RESPONSE
+            yield ChatStreamEvent(kind="replace", delta=content)
+
+        reply = Message.create(
+            conversation_id=conversation.id,
+            role=MessageRole.ASSISTANT,
+            content=content,
+            context_snapshot=context.to_prompt_dict(),
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            model=model,
+            prompt_version=PROMPT_VERSION,
+        )
+        await self._persist_turn(conversation, user_message, reply, executed)
+        await self._meter(
+            conversation.user_id,
+            model=model,
+            response=CompletionResponse(
+                content=content,
+                model=model,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                cached_tokens=cached_tokens,
+            ),
+            started=started,
+            status="ok",
+            today=today,
+        )
+
+        yield ChatStreamEvent(
+            kind="message",
+            reply=ChatReplyDTO(
+                conversation_id=conversation.id,
+                message=message_dto(reply),
+                tools_used=tuple(result.name for result in executed),
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+            ),
+        )
+
+    async def _run_tool_calls(
+        self, calls: Sequence[ToolInvocation], context: ToolContext
+    ) -> tuple[list[dict[str, Any]], list[ToolResult]]:
+        payloads: list[dict[str, Any]] = []
+        results: list[ToolResult] = []
+        for call in calls:
+            result = await self._registry.execute(call.name, call.arguments, context=context)
+            results.append(result)
+            payloads.append(
+                {
+                    "role": MessageRole.TOOL.value,
+                    "tool_call_id": call.call_id,
+                    "content": json.dumps(result.payload, default=str),
+                }
+            )
+        return payloads, results
 
     async def _run_tools(
         self, response: CompletionResponse, context: ToolContext

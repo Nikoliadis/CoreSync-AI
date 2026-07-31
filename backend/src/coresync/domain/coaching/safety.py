@@ -267,6 +267,62 @@ class OutputGuard:
         return OutputVerdict(is_safe=not reasons, reasons=tuple(reasons))
 
 
+# Longest risky construct the guard looks for, rounded up generously: a five-digit
+# number plus " calories" is ~16 characters, the wordiest leak phrase ~26. 64 leaves
+# ample headroom, and the cost of a larger value is only a slightly laggier tail.
+STREAM_HOLDBACK_CHARS = 64
+
+
+class StreamingOutputGuard:
+    """Applies the output guard to a reply that is still being generated.
+
+    Streaming creates a problem the batch guard does not have: text shown to the user
+    cannot be taken back. Inspecting only the finished reply would mean an unsafe
+    calorie number is already on screen by the time it is detected.
+
+    The fix is to hold back the tail. Text is released only once at least
+    ``STREAM_HOLDBACK_CHARS`` more characters have arrived behind it, so any pattern
+    lying entirely within the released prefix has necessarily been inspected in full,
+    and a pattern that would straddle the boundary is still inside the buffer when the
+    check runs. If the guard trips, nothing further is released and the caller replaces
+    the whole message — the unsafe fragment was never emitted (docs/10 §7.5).
+    """
+
+    def __init__(self, guard: OutputGuard | None = None) -> None:
+        self._guard = guard or OutputGuard()
+        self._buffer = ""
+        self._released = 0
+
+    @property
+    def text(self) -> str:
+        """Everything received so far, released or not."""
+        return self._buffer
+
+    def push(self, delta: str) -> tuple[str, OutputVerdict]:
+        """Absorb a fragment and return whatever is now safe to show."""
+        self._buffer += delta
+        verdict = self._guard.inspect(self._buffer)
+        if verdict.must_regenerate:
+            return "", verdict
+
+        safe_upto = max(0, len(self._buffer) - STREAM_HOLDBACK_CHARS)
+        if safe_upto <= self._released:
+            return "", verdict
+
+        released = self._buffer[self._released : safe_upto]
+        self._released = safe_upto
+        return released, verdict
+
+    def finish(self) -> tuple[str, OutputVerdict]:
+        """Inspect the complete reply and release the remainder if it is clean."""
+        verdict = self._guard.inspect(self._buffer)
+        if verdict.must_regenerate:
+            return "", verdict
+        remainder = self._buffer[self._released :]
+        self._released = len(self._buffer)
+        return remainder, verdict
+
+
 FALLBACK_RESPONSE = (
     "I couldn't put together a good answer to that one. Try asking me a different way, "
     "or ask about something specific in your training and I'll pull the numbers."

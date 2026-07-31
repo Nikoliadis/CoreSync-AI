@@ -6,6 +6,7 @@ from types import TracebackType
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from coresync.infrastructure.database.repositories.admin import SqlAlchemyAdminReadRepository
 from coresync.infrastructure.database.repositories.catalog import (
     SqlAlchemyCatalogReferenceRepository,
     SqlAlchemyExerciseRepository,
@@ -23,6 +24,11 @@ from coresync.infrastructure.database.repositories.identity import (
     SqlAlchemySingleUseTokenRepository,
     SqlAlchemyUserDeviceRepository,
     SqlAlchemyUserRepository,
+)
+from coresync.infrastructure.database.repositories.notifications import (
+    SqlAlchemyNotificationPreferencesRepository,
+    SqlAlchemyNotificationRepository,
+    SqlAlchemyOutboxRepository,
 )
 from coresync.infrastructure.database.repositories.profile import (
     SqlAlchemyGoalRepository,
@@ -101,6 +107,10 @@ class SqlAlchemyUnitOfWork:
         self.insights = SqlAlchemyInsightRepository(session)
         self.ai_usage = SqlAlchemyUsageRepository(session)
         self.knowledge = SqlAlchemyKnowledgeRepository(session)
+        self.notifications = SqlAlchemyNotificationRepository(session)
+        self.notification_outbox = SqlAlchemyOutboxRepository(session)
+        self.notification_preferences = SqlAlchemyNotificationPreferencesRepository(session)
+        self.admin = SqlAlchemyAdminReadRepository(session)
 
     async def __aexit__(
         self,

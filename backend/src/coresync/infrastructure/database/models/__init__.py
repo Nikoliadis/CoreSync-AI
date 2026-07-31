@@ -39,6 +39,11 @@ from coresync.infrastructure.database.models.identity import (
     UserModel,
     UserSettingsModel,
 )
+from coresync.infrastructure.database.models.notifications import (
+    NotificationModel,
+    NotificationOutboxModel,
+    NotificationPreferencesModel,
+)
 from coresync.infrastructure.database.models.profile import (
     GoalModel,
     NutritionTargetModel,
@@ -82,6 +87,9 @@ __all__ = [
     "GoalModel",
     "MuscleGroupModel",
     "MuscleModel",
+    "NotificationModel",
+    "NotificationOutboxModel",
+    "NotificationPreferencesModel",
     "NutritionTargetModel",
     "PersonalRecordModel",
     "ProfileModel",

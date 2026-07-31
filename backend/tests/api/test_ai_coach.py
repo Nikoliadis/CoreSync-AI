@@ -7,6 +7,7 @@ because the point is to prove that what the *model* says cannot break the guaran
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 
 import pytest
@@ -457,6 +458,75 @@ class TestStreaming:
         )
         assert "self_harm" in response.text
         assert llm_gateway.call_count == 0
+
+    async def test_the_answer_arrives_as_multiple_deltas(
+        self, client: AsyncClient, email_sender: CapturingEmailSender, llm_gateway: ScriptedGateway
+    ) -> None:
+        """Token by token, not one lump — the whole point of the endpoint."""
+        answer = (
+            "Your squat has been climbing steadily for six weeks, which is a good sign. "
+            "Keep the same progression for another block and reassess after that."
+        )
+        llm_gateway.queue(reply(answer))
+        headers = await _register(client, email_sender)
+
+        response = await client.post(
+            "/v1/ai/chat/stream", json={"content": "How is my squat?"}, headers=headers
+        )
+
+        body = response.text
+        assert body.count("event: delta") > 1, "expected the reply to arrive in pieces"
+
+        streamed = "".join(
+            json.loads(line[5:].strip())["text"]
+            for frame in body.split("\n\n")
+            if "event: delta" in frame
+            for line in frame.split("\n")
+            if line.startswith("data:")
+        )
+        assert streamed == answer
+        assert "event: message" in body
+
+    async def test_an_unsafe_number_is_never_streamed_to_the_client(
+        self, client: AsyncClient, email_sender: CapturingEmailSender, llm_gateway: ScriptedGateway
+    ) -> None:
+        """The guarantee that makes streaming safe.
+
+        The guard withholds the tail, so the offending fragment is still inside the
+        buffer when it trips and the client is told to replace what it has.
+        """
+        llm_gateway.queue(
+            reply(
+                "Here is a plan that will get you lean quickly. "
+                "Drop to 800 calories a day and train fasted every morning."
+            )
+        )
+        headers = await _register(client, email_sender)
+
+        response = await client.post(
+            "/v1/ai/chat/stream", json={"content": "How do I cut fast?"}, headers=headers
+        )
+
+        body = response.text
+        assert "800 calories" not in body
+        assert "event: replace" in body
+
+    async def test_tools_are_announced_during_the_stream(
+        self, client: AsyncClient, email_sender: CapturingEmailSender, llm_gateway: ScriptedGateway
+    ) -> None:
+        llm_gateway.queue(tool_request("get_personal_records", {})).queue(
+            reply("You have no records logged yet — let's fix that.")
+        )
+        headers = await _register(client, email_sender)
+
+        response = await client.post(
+            "/v1/ai/chat/stream", json={"content": "What are my PRs?"}, headers=headers
+        )
+
+        assert "event: tools" in response.text
+        assert "get_personal_records" in response.text
+        # Two streamed rounds: one that asked for the tool, one that answered from it.
+        assert llm_gateway.call_count == 2
 
 
 # ------------------------------------------------------------------- unusable

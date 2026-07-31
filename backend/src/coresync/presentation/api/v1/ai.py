@@ -99,10 +99,13 @@ async def send_message(
     },
     summary="Send a message and stream the reply",
     description=(
-        "Server-sent events. Emits a `message` event carrying the finished reply, then "
-        "`done`. Errors raised before the stream opens are ordinary JSON responses; an "
-        "error after it opens arrives as an `error` event, because the status line has "
-        "already been sent."
+        "Server-sent events, token by token.\n\n"
+        "`delta` appends text. `replace` discards everything shown so far and "
+        "substitutes its payload — the output guard withholds the tail of the reply, so "
+        "if it trips mid-generation the unsafe fragment is never emitted and the client "
+        "is told to swap in a safe answer. `tools` names tools that ran. `message` "
+        "closes the turn with the persisted reply. `error` carries a user-safe message "
+        "when the failure happens after the status line has already been sent."
     ),
 )
 async def send_message_streaming(
@@ -118,23 +121,30 @@ async def send_message_streaming(
 
     async def events() -> AsyncIterator[str]:
         try:
-            reply = await use_case.execute(command)
+            async for event in use_case.stream(command):
+                if event.kind == "delta":
+                    yield _sse("delta", {"text": event.delta})
+                elif event.kind == "replace":
+                    yield _sse("replace", {"text": event.delta})
+                elif event.kind == "tools":
+                    yield _sse("tools", {"tools": list(event.tools)})
+                elif event.kind == "message" and event.reply is not None:
+                    yield _sse(
+                        "message",
+                        {
+                            "conversationId": str(event.reply.conversation_id),
+                            "message": MessageResponse.model_validate(
+                                event.reply.message
+                            ).model_dump(by_alias=True, mode="json"),
+                            "toolsUsed": list(event.reply.tools_used),
+                        },
+                    )
         except Exception as exc:
-            # The response has already begun, so the only honest channel left is an
-            # event the client can render. The message is the safe user-facing one.
+            # The status line is already sent, so the only honest channel left is an
+            # event the client can render. The message is the user-safe one.
             yield _sse("error", {"message": _safe_message(exc)})
             return
 
-        yield _sse(
-            "message",
-            {
-                "conversationId": str(reply.conversation_id),
-                "message": MessageResponse.model_validate(reply.message).model_dump(
-                    by_alias=True, mode="json"
-                ),
-                "toolsUsed": list(reply.tools_used),
-            },
-        )
         yield _sse("done", {})
 
     return StreamingResponse(

@@ -10,6 +10,7 @@ from __future__ import annotations
 from types import TracebackType
 from typing import Protocol
 
+from coresync.domain.admin.repositories import AdminReadRepository
 from coresync.domain.catalog.repositories import (
     CatalogReferenceRepository,
     ExerciseRepository,
@@ -27,6 +28,11 @@ from coresync.domain.identity.repositories import (
     SingleUseTokenRepository,
     UserDeviceRepository,
     UserRepository,
+)
+from coresync.domain.notifications.repositories import (
+    NotificationPreferencesRepository,
+    NotificationRepository,
+    OutboxRepository,
 )
 from coresync.domain.profile.repositories import (
     GoalRepository,
@@ -77,6 +83,10 @@ class UnitOfWork(Protocol):
     insights: InsightRepository
     ai_usage: UsageRepository
     knowledge: KnowledgeRepository
+    notifications: NotificationRepository
+    notification_outbox: OutboxRepository
+    notification_preferences: NotificationPreferencesRepository
+    admin: AdminReadRepository
 
     async def __aenter__(self) -> UnitOfWork: ...
 

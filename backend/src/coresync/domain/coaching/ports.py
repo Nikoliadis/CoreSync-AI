@@ -80,13 +80,27 @@ class CompletionResponse:
 
 @dataclass(frozen=True, slots=True)
 class CompletionChunk:
-    """One streamed fragment. ``is_final`` carries the usage totals."""
+    """One streamed fragment.
+
+    ``is_final`` marks the closing chunk, which carries the usage totals and any
+    tool calls the model asked for. Tool calls arrive on the final chunk rather than
+    incrementally because they are only actionable once complete — a half-parsed
+    argument object cannot be executed, and the provider sends them as fragments that
+    have to be reassembled anyway.
+    """
 
     delta: str = ""
     is_final: bool = False
     model: str = ""
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    cached_tokens: int = 0
+    tool_calls: tuple[ToolInvocation, ...] = ()
+    finish_reason: str = ""
+
+    @property
+    def wants_tools(self) -> bool:
+        return bool(self.tool_calls)
 
 
 class LLMGateway(Protocol):

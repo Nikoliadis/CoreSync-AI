@@ -1,0 +1,328 @@
+@import "tailwindcss";
+
+/* ============================================================================
+   CoreSync design tokens — docs/09 §2–§7.
+
+   Two layers, deliberately:
+     1. raw palette + per-theme assignment on :root / .light
+     2. semantic aliases exposed to Tailwind via `@theme inline`
+
+   Components consume the **semantic** layer only. Nothing outside this file
+   references `--brand-500` or a raw hex, so re-theming is a variable swap
+   rather than a search-and-replace (docs/09 §2.4).
+   ========================================================================== */
+
+@theme {
+  /* Drop Tailwind's default palette: a stray `bg-red-500` should fail review,
+     not silently ship an off-system colour. */
+  --color-*: initial;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono-code), ui-monospace, "SF Mono", monospace;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Motion (docs/09 §7) — duration and easing travel together. */
+  --ease-swift: cubic-bezier(0.2, 0, 0, 1);
+  --animate-duration-instant: 100ms;
+  --animate-duration-fast: 180ms;
+  --animate-duration-base: 260ms;
+  --animate-duration-slow: 420ms;
+}
+
+:root {
+  color-scheme: dark;
+
+  /* --- brand ------------------------------------------------------------ */
+  --brand-400: #d8ff6e;
+  --brand-500: #c8ff3d;
+  --brand-600: #b2e82a;
+  /* Brand is a *light* colour — white text on it fails contrast, so text on
+     brand fills is near-black (docs/09 §2.1). */
+  --brand-ink: #0f0f11;
+  /* The accent as *text*. The brand lime is a fill colour: at 1.07:1 on the light
+     page it is unreadable, which the accessibility gate caught on every link. Dark
+     mode keeps the bright accent (16.8:1); light mode uses a darkened lime that
+     clears 4.5:1 on all four light surfaces (worst case 5.68:1). */
+  --accent-text: #c8ff3d;
+
+  /* --- surfaces & ink (dark is the default theme) ----------------------- */
+  --bg: #0a0a0b;
+  --surface: #0f0f11;
+  --surface-raised: #17171a;
+  --surface-well: #1f1f23;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --text: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+
+  /* --- status (never a series colour, never the only signal) ------------ */
+  --good: #0ca30c;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+
+  /* --- chart slots, dark (validated — docs/09 §3.1) --------------------- */
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
+  --chart-6: #008300;
+  --chart-7: #9085e9;
+  --chart-8: #e66767;
+  --chart-grid: rgba(255, 255, 255, 0.07);
+
+  /* Elevation in dark is surface lightness, not shadow — shadows are close to
+     invisible on near-black (docs/09 §5). */
+  --shadow-1: 0 0 0 0 transparent;
+  --shadow-2: 0 0 0 0 transparent;
+  --shadow-3: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+.light {
+  color-scheme: light;
+
+  --bg: #f4f4f2;
+  --surface: #fafafa;
+  --surface-raised: #ffffff;
+  --surface-well: #f0f0ee;
+  --border: rgba(11, 11, 11, 0.1);
+  --border-strong: rgba(11, 11, 11, 0.24);
+  --text: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #6b6a66;
+  --accent-text: #4f660d;
+
+  /* --- chart slots, light ----------------------------------------------- */
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  --chart-5: #e87ba4;
+  --chart-6: #008300;
+  --chart-7: #4a3aa7;
+  --chart-8: #e34948;
+  --chart-grid: rgba(11, 11, 11, 0.09);
+
+  /* In light mode elevation is a soft shadow *plus* the surface ladder. */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+
+/* --- semantic layer: the only colour names components may use ------------- */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-well: var(--surface-well);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-text: var(--text);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+
+  --color-accent: var(--brand-500);
+  --color-accent-hover: var(--brand-600);
+  --color-accent-soft: var(--brand-400);
+  --color-accent-ink: var(--brand-ink);
+  --color-accent-text: var(--accent-text);
+  --color-focus: var(--brand-400);
+
+  --color-good: var(--good);
+  --color-warning: var(--warning);
+  --color-serious: var(--serious);
+  --color-critical: var(--critical);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+  --color-chart-grid: var(--chart-grid);
+
+  --shadow-e1: var(--shadow-1);
+  --shadow-e2: var(--shadow-2);
+  --shadow-e3: var(--shadow-3);
+
+  /* Type scale (docs/09 §4). Negative tracking on large text is what makes
+     headings read as designed rather than as browser defaults. */
+  --text-overline: 0.6875rem;
+  --text-overline--line-height: 0.875rem;
+  --text-overline--font-weight: 600;
+  --text-overline--letter-spacing: 0.08em;
+
+  --text-caption: 0.8125rem;
+  --text-caption--line-height: 1.125rem;
+  --text-caption--font-weight: 500;
+
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.375rem;
+
+  --text-body-lg: 1.0625rem;
+  --text-body-lg--line-height: 1.625rem;
+
+  --text-h3: 1.25rem;
+  --text-h3--line-height: 1.625rem;
+  --text-h3--font-weight: 600;
+
+  --text-h2: 1.5rem;
+  --text-h2--line-height: 1.875rem;
+  --text-h2--font-weight: 600;
+  --text-h2--letter-spacing: -0.01em;
+
+  --text-h1: 2rem;
+  --text-h1--line-height: 2.375rem;
+  --text-h1--font-weight: 700;
+  --text-h1--letter-spacing: -0.02em;
+
+  --text-display: 2.5rem;
+  --text-display--line-height: 2.75rem;
+  --text-display--font-weight: 700;
+  --text-display--letter-spacing: -0.02em;
+
+  --text-hero: 3rem;
+  --text-hero--line-height: 3.25rem;
+  --text-hero--font-weight: 700;
+  --text-hero--letter-spacing: -0.02em;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* A visible focus indicator is non-negotiable (docs/09 §9). `:focus-visible`
+     rather than `:focus`, so pointer users do not get rings on click while
+     keyboard users always do. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background-color: var(--color-accent);
+    color: var(--color-accent-ink);
+  }
+}
+
+/* Overlay/content transitions for Radix, keyed off its `data-state`.
+   Written here rather than pulled from a plugin so the durations match the
+   motion tokens above exactly. */
+@keyframes cs-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes cs-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes cs-zoom-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.96);
+  }
+}
+@keyframes cs-zoom-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.96);
+  }
+}
+@keyframes cs-slide-up-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes cs-slide-down-out {
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@layer utilities {
+  .cs-overlay[data-state="open"] {
+    animation: cs-fade-in var(--animate-duration-fast) var(--ease-swift);
+  }
+  .cs-overlay[data-state="closed"] {
+    animation: cs-fade-out var(--animate-duration-fast) var(--ease-swift);
+  }
+  .cs-dialog[data-state="open"] {
+    animation: cs-zoom-in var(--animate-duration-base) var(--ease-swift);
+  }
+  .cs-dialog[data-state="closed"] {
+    animation: cs-zoom-out var(--animate-duration-base) var(--ease-swift);
+  }
+  /* The sheet rises from the bottom edge on mobile and becomes a centred dialog
+     from the `sm` breakpoint up, so the animation swaps with it. */
+  .cs-sheet[data-state="open"] {
+    animation: cs-slide-up-in var(--animate-duration-base) var(--ease-swift);
+  }
+  .cs-sheet[data-state="closed"] {
+    animation: cs-slide-down-out var(--animate-duration-base) var(--ease-swift);
+  }
+  @media (min-width: 640px) {
+    .cs-sheet[data-state="open"] {
+      animation: cs-zoom-in var(--animate-duration-base) var(--ease-swift);
+    }
+    .cs-sheet[data-state="closed"] {
+      animation: cs-zoom-out var(--animate-duration-base) var(--ease-swift);
+    }
+  }
+
+  /* Numbers must not jitter as they change — set tables, timers and axis ticks
+     all animate values in place. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* `prefers-reduced-motion` disables every non-essential animation and replaces
+   transitions with instant state changes (docs/09 §7). A blanket override on
+   purpose: opting in per component means forgetting somewhere. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -250,6 +250,16 @@ class SqlAlchemyUserDeviceRepository:
         model = (await self._session.execute(stmt)).scalar_one_or_none()
         return UserDeviceMapper.to_entity(model) if model else None
 
+    async def list_for_user(self, user_id: UUID) -> list[UserDevice]:
+        stmt = (
+            select(UserDeviceModel)
+            .where(UserDeviceModel.user_id == user_id)
+            .order_by(UserDeviceModel.last_seen_at.desc().nullslast())
+        )
+        return [
+            UserDeviceMapper.to_entity(m) for m in (await self._session.execute(stmt)).scalars()
+        ]
+
     async def add(self, device: UserDevice) -> None:
         self._session.add(UserDeviceMapper.to_model(device))
         await self._session.flush()

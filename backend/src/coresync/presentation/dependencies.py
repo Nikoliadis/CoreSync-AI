@@ -15,6 +15,7 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.asyncio import Redis
 
+from coresync.application.admin.use_cases import GetPlatformStatsUseCase, ListUsersUseCase
 from coresync.application.catalog.use_cases import (
     CreateCustomExerciseUseCase,
     DeleteCustomExerciseUseCase,
@@ -68,6 +69,11 @@ from coresync.application.identity.verification import (
     ResendVerificationUseCase,
     ResetPasswordUseCase,
     VerifyEmailUseCase,
+)
+from coresync.application.notifications.use_cases import (
+    ListNotificationsUseCase,
+    MarkNotificationReadUseCase,
+    NotificationPreferencesUseCase,
 )
 from coresync.application.profile.use_cases import (
     CompleteOnboardingUseCase,
@@ -635,6 +641,27 @@ def acknowledge_insight_use_case(uow: Uow) -> AcknowledgeInsightUseCase:
 
 def ai_usage_use_case(c: Container, uow: Uow) -> GetUsageUseCase:
     return GetUsageUseCase(uow=uow, quota=c.chat_quota, clock=c.clock)
+
+
+# ------------------------------------------------------- notifications & admin
+def list_notifications_use_case(uow: Uow) -> ListNotificationsUseCase:
+    return ListNotificationsUseCase(uow=uow)
+
+
+def mark_notification_read_use_case(c: Container, uow: Uow) -> MarkNotificationReadUseCase:
+    return MarkNotificationReadUseCase(uow=uow, clock=c.clock)
+
+
+def notification_prefs_use_case(uow: Uow) -> NotificationPreferencesUseCase:
+    return NotificationPreferencesUseCase(uow=uow)
+
+
+def platform_stats_use_case(c: Container, uow: Uow) -> GetPlatformStatsUseCase:
+    return GetPlatformStatsUseCase(uow=uow, clock=c.clock)
+
+
+def list_users_use_case(uow: Uow) -> ListUsersUseCase:
+    return ListUsersUseCase(uow=uow)
 
 
 def build_container(settings: Settings) -> AppContainer:
