@@ -85,6 +85,32 @@ class Settings(BaseSettings):
     # Bulk endpoint with large payloads, so the opposite direction.
     rate_limit_sync_per_minute: int = 20
     cors_allowed_origins: str = "http://localhost:3000"
+    # The coach is the expensive endpoint; a tight per-minute limit also blunts the
+    # obvious abuse of using someone else's account as a free LLM proxy.
+    rate_limit_ai_chat_per_minute: int = 10
+
+    # ---------------------------------------------------------------- ai
+    # Empty by default so the whole application runs, tests included, with no provider
+    # configured. ``ai_enabled`` reports whether a real gateway can be built; everything
+    # AI-shaped degrades to a clear 503 rather than failing at import.
+    azure_openai_endpoint: str = ""
+    azure_openai_api_key: str = ""
+    azure_openai_api_version: str = "2024-10-21"
+    # Deployment names, not model names: on Azure the deployment is what you address, and
+    # conflating the two is the most common reason a working config fails in another
+    # environment.
+    azure_openai_chat_deployment: str = "gpt-4o"
+    azure_openai_mini_deployment: str = "gpt-4o-mini"
+    azure_openai_embedding_deployment: str = "text-embedding-3-small"
+
+    ai_request_timeout_seconds: float = 60.0
+    ai_max_tool_iterations: int = 4
+    ai_context_message_limit: int = 12
+    ai_embedding_dimensions: int = 1536
+
+    # Free-tier quotas, enforced per user per local day (docs/10 §9).
+    ai_free_daily_message_limit: int = 20
+    ai_free_daily_cost_ceiling_usd: float = 0.50
 
     # ---------------------------------------------------------------- derived
     @property
@@ -94,6 +120,15 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
+
+    @property
+    def ai_enabled(self) -> bool:
+        """Whether a real provider is configured.
+
+        Checked at the composition root so an unconfigured deployment returns a clear
+        503 from the AI endpoints while the rest of the API works normally.
+        """
+        return bool(self.azure_openai_endpoint and self.azure_openai_api_key)
 
     @property
     def sync_database_url(self) -> str:

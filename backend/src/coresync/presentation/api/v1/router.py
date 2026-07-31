@@ -9,6 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from coresync.presentation.api.v1 import (
+    ai,
     auth,
     exercises,
     progress,
@@ -29,5 +30,6 @@ api_router.include_router(routines.router)
 # specific `/workouts/routines/...` paths that share the `/workouts` prefix.
 api_router.include_router(sessions.router)
 api_router.include_router(progress.router)
+api_router.include_router(ai.router)
 
-# Phase 3 and 5+ mount here: nutrition, ai, social.
+# Phase 3 and 6+ mount here: nutrition, social.

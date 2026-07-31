@@ -10,6 +10,13 @@ from coresync.infrastructure.database.repositories.catalog import (
     SqlAlchemyCatalogReferenceRepository,
     SqlAlchemyExerciseRepository,
 )
+from coresync.infrastructure.database.repositories.coaching import (
+    SqlAlchemyConversationRepository,
+    SqlAlchemyInsightRepository,
+    SqlAlchemyKnowledgeRepository,
+    SqlAlchemyMessageRepository,
+    SqlAlchemyUsageRepository,
+)
 from coresync.infrastructure.database.repositories.identity import (
     SqlAlchemyAuthIdentityRepository,
     SqlAlchemyRefreshTokenRepository,
@@ -89,6 +96,11 @@ class SqlAlchemyUnitOfWork:
         self.exercise_stats = SqlAlchemyExerciseStatisticsRepository(session)
         self.streaks = SqlAlchemyStreakRepository(session)
         self.sync_log = SqlAlchemySyncOperationLogRepository(session)
+        self.conversations = SqlAlchemyConversationRepository(session)
+        self.messages = SqlAlchemyMessageRepository(session)
+        self.insights = SqlAlchemyInsightRepository(session)
+        self.ai_usage = SqlAlchemyUsageRepository(session)
+        self.knowledge = SqlAlchemyKnowledgeRepository(session)
 
     async def __aexit__(
         self,

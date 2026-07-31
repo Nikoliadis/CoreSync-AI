@@ -23,6 +23,14 @@ from coresync.infrastructure.database.models.catalog import (
     MuscleModel,
     UserFavoriteExerciseModel,
 )
+from coresync.infrastructure.database.models.coaching import (
+    AiConversationModel,
+    AiEmbeddingModel,
+    AiInsightModel,
+    AiMessageModel,
+    AiToolCallModel,
+    AiUsageLogModel,
+)
 from coresync.infrastructure.database.models.identity import (
     AuthIdentityModel,
     RefreshTokenModel,
@@ -53,6 +61,12 @@ from coresync.infrastructure.database.models.workout import (
 )
 
 __all__ = [
+    "AiConversationModel",
+    "AiEmbeddingModel",
+    "AiInsightModel",
+    "AiMessageModel",
+    "AiToolCallModel",
+    "AiUsageLogModel",
     "AuthIdentityModel",
     "Base",
     "BodyMeasurementModel",

@@ -14,6 +14,13 @@ from coresync.domain.catalog.repositories import (
     CatalogReferenceRepository,
     ExerciseRepository,
 )
+from coresync.domain.coaching.ports import (
+    ConversationRepository,
+    InsightRepository,
+    KnowledgeRepository,
+    MessageRepository,
+    UsageRepository,
+)
 from coresync.domain.identity.repositories import (
     AuthIdentityRepository,
     RefreshTokenRepository,
@@ -65,6 +72,11 @@ class UnitOfWork(Protocol):
     exercise_stats: ExerciseStatisticsRepository
     streaks: StreakRepository
     sync_log: SyncOperationLogRepository
+    conversations: ConversationRepository
+    messages: MessageRepository
+    insights: InsightRepository
+    ai_usage: UsageRepository
+    knowledge: KnowledgeRepository
 
     async def __aenter__(self) -> UnitOfWork: ...
 

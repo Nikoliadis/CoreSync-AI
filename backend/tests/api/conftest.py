@@ -11,6 +11,7 @@ import os
 import subprocess
 import sys
 from collections.abc import AsyncIterator, Iterator
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,8 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from coresync.application.coaching.chat import ChatQuota
+from coresync.application.coaching.tools import ToolRegistry
 from coresync.application.common.ports import OidcIdentity
 from coresync.application.identity.auth import TokenIssuer
 from coresync.core.clock import SystemClock
@@ -42,6 +45,7 @@ from tests.fakes import (
     FakeRateLimiter,
     FakeRevocationStore,
 )
+from tests.fakes_ai import ScriptedGateway
 
 API_ROOT = Path(__file__).resolve().parents[2]
 
@@ -116,11 +120,22 @@ def google_verifier() -> FakeOidcVerifier:
     )
 
 
+@pytest.fixture
+def llm_gateway() -> ScriptedGateway:
+    """Scripted, not recorded.
+
+    The cases that matter — an unsafe calorie number, a leaked prompt, a call to a tool
+    that does not exist — are ones a real provider rarely produces on demand.
+    """
+    return ScriptedGateway()
+
+
 @pytest_asyncio.fixture
 async def container(
     api_settings: Settings,
     email_sender: CapturingEmailSender,
     google_verifier: FakeOidcVerifier,
+    llm_gateway: ScriptedGateway,
 ) -> AsyncIterator[AppContainer]:
     clock = SystemClock()
     jwt_service = JwtService(api_settings)
@@ -151,6 +166,12 @@ async def container(
             AuthProvider.APPLE: FakeOidcVerifier(),
         },
         token_issuer=TokenIssuer(jwt_service, api_settings, clock),
+        llm_gateway=llm_gateway,
+        embedding_gateway=None,
+        tool_registry=ToolRegistry(),
+        # Small on purpose so quota enforcement is reachable in a test without sending
+        # twenty messages.
+        chat_quota=ChatQuota(daily_message_limit=3, daily_cost_ceiling_usd=Decimal("0.50")),
     )
     await database.dispose()
 

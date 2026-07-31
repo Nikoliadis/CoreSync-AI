@@ -13,6 +13,8 @@ dependencies = [
     "email-validator>=2.2",
     "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30",
+    # pgvector column type for the AI retrieval corpus (docs/10 §3.2).
+    "pgvector>=0.3",
     "alembic>=1.14",
     "redis>=5.2",
     "celery>=5.4",

@@ -8,6 +8,7 @@ pieces — the unit of work, the current user — come through ``Depends``.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -26,6 +27,18 @@ from coresync.application.catalog.use_cases import (
     ToggleFavoriteExerciseUseCase,
     UpdateCustomExerciseUseCase,
 )
+from coresync.application.coaching.chat import (
+    ChatQuota,
+    GetUsageUseCase,
+    SendMessageUseCase,
+)
+from coresync.application.coaching.context_assembler import ContextAssembler
+from coresync.application.coaching.insights import (
+    AcknowledgeInsightUseCase,
+    GenerateInsightsUseCase,
+    ListInsightsUseCase,
+)
+from coresync.application.coaching.tools import ToolRegistry
 from coresync.application.common.dto import AuthenticatedUser
 from coresync.application.common.ports import (
     BreachedPasswordChecker,
@@ -121,9 +134,11 @@ from coresync.core.errors import (
     EmailNotVerifiedError,
     ForbiddenError,
     UnauthenticatedError,
+    UpstreamUnavailableError,
 )
 from coresync.core.logging import user_id_var
 from coresync.core.security import JwtService, PasswordHasherService
+from coresync.domain.coaching.ports import EmbeddingGateway, LLMGateway
 from coresync.domain.identity.entities import AuthProvider
 from coresync.domain.identity.policies import PasswordPolicy
 from coresync.domain.profile.services import TdeeCalculator
@@ -163,6 +178,13 @@ class AppContainer:
     breach_checker: BreachedPasswordChecker
     oidc_verifiers: dict[AuthProvider, OidcVerifier]
     token_issuer: TokenIssuer
+    # None when no provider is configured. The AI endpoints then answer 503 while
+    # the rest of the API works normally — an unconfigured coach must not take the
+    # product down.
+    llm_gateway: LLMGateway | None
+    embedding_gateway: EmbeddingGateway | None
+    tool_registry: ToolRegistry
+    chat_quota: ChatQuota
 
     def unit_of_work(self) -> UnitOfWork:
         return SqlAlchemyUnitOfWork(self.database.session_factory)
@@ -561,12 +583,72 @@ def sync_use_case(c: Container) -> SyncWorkoutsUseCase:
     )
 
 
+# --------------------------------------------------------------------- ai
+def _require_gateway(c: AppContainer) -> LLMGateway:
+    """The coach needs a provider; everything else does not.
+
+    Raised as an upstream failure rather than a configuration error because that is what
+    it is from the caller's side: the feature is temporarily unavailable, and the status
+    code says so without advertising how the deployment is configured.
+    """
+    if c.llm_gateway is None:
+        raise UpstreamUnavailableError("The AI coach is not available right now.")
+    return c.llm_gateway
+
+
+def context_assembler(uow: Uow) -> ContextAssembler:
+    return ContextAssembler(uow=uow)
+
+
+def send_message_use_case(c: Container, uow: Uow) -> SendMessageUseCase:
+    return SendMessageUseCase(
+        uow=uow,
+        gateway=_require_gateway(c),
+        assembler=ContextAssembler(uow=uow),
+        registry=c.tool_registry,
+        quota=c.chat_quota,
+        clock=c.clock,
+        max_tool_iterations=c.settings.ai_max_tool_iterations,
+        context_message_limit=c.settings.ai_context_message_limit,
+    )
+
+
+def list_insights_use_case(uow: Uow) -> ListInsightsUseCase:
+    return ListInsightsUseCase(uow=uow)
+
+
+def generate_insights_use_case(c: Container, uow: Uow) -> GenerateInsightsUseCase:
+    # Deliberately tolerant of a missing gateway: detection is deterministic and the
+    # hand-written wording is a perfectly good insight, so this endpoint works without a
+    # provider at all.
+    return GenerateInsightsUseCase(
+        uow=uow,
+        gateway=c.llm_gateway,
+        assembler=ContextAssembler(uow=uow),
+        clock=c.clock,
+    )
+
+
+def acknowledge_insight_use_case(uow: Uow) -> AcknowledgeInsightUseCase:
+    return AcknowledgeInsightUseCase(uow=uow)
+
+
+def ai_usage_use_case(c: Container, uow: Uow) -> GetUsageUseCase:
+    return GetUsageUseCase(uow=uow, quota=c.chat_quota, clock=c.clock)
+
+
 def build_container(settings: Settings) -> AppContainer:
     """Compose the object graph. Called from the app lifespan and from tests."""
     from coresync.infrastructure.cache.redis_client import (
         RedisRateLimiter,
         RedisTokenRevocationStore,
         create_redis,
+    )
+    from coresync.infrastructure.external.llm import (
+        AzureOpenAIEmbeddingGateway,
+        AzureOpenAIGateway,
+        ModelRouter,
+        build_azure_client,
     )
     from coresync.infrastructure.external.oidc import AppleOidcVerifier, GoogleOidcVerifier
     from coresync.infrastructure.notifications.email import (
@@ -581,6 +663,29 @@ def build_container(settings: Settings) -> AppContainer:
     clock = SystemClock()
     jwt_service = JwtService(settings)
     redis = create_redis(settings)
+
+    llm_gateway: LLMGateway | None = None
+    embedding_gateway: EmbeddingGateway | None = None
+    if settings.ai_enabled:
+        azure_client = build_azure_client(
+            endpoint=settings.azure_openai_endpoint, api_key=settings.azure_openai_api_key
+        )
+        llm_gateway = AzureOpenAIGateway(
+            client=azure_client,
+            router=ModelRouter(
+                chat_deployment=settings.azure_openai_chat_deployment,
+                mini_deployment=settings.azure_openai_mini_deployment,
+                embedding_deployment=settings.azure_openai_embedding_deployment,
+            ),
+            api_version=settings.azure_openai_api_version,
+            timeout_seconds=settings.ai_request_timeout_seconds,
+        )
+        embedding_gateway = AzureOpenAIEmbeddingGateway(
+            client=azure_client,
+            deployment=settings.azure_openai_embedding_deployment,
+            api_version=settings.azure_openai_api_version,
+            dimensions=settings.ai_embedding_dimensions,
+        )
 
     return AppContainer(
         settings=settings,
@@ -609,4 +714,11 @@ def build_container(settings: Settings) -> AppContainer:
             AuthProvider.APPLE: AppleOidcVerifier(settings),
         },
         token_issuer=TokenIssuer(jwt_service, settings, clock),
+        llm_gateway=llm_gateway,
+        embedding_gateway=embedding_gateway,
+        tool_registry=ToolRegistry(),
+        chat_quota=ChatQuota(
+            daily_message_limit=settings.ai_free_daily_message_limit,
+            daily_cost_ceiling_usd=Decimal(str(settings.ai_free_daily_cost_ceiling_usd)),
+        ),
     )
