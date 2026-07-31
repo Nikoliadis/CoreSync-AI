@@ -50,10 +50,16 @@ def upgrade() -> None:
         sa.Column("message_count", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("is_archived", sa.Boolean(), nullable=False, server_default="false"),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.Column("deleted_at", sa.DateTime(timezone=True)),
     )
@@ -91,10 +97,16 @@ def upgrade() -> None:
         # The category only. The text that triggered triage is never stored here.
         sa.Column("safety_category", sa.String(30)),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.CheckConstraint("role IN ('user','assistant','system','tool')", name="role_valid"),
     )
@@ -119,7 +131,10 @@ def upgrade() -> None:
         sa.Column("is_error", sa.Boolean(), nullable=False, server_default="false"),
         sa.Column("error_code", sa.String(60)),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
     )
     op.create_index("ix_ai_tool_calls_message", "ai_tool_calls", ["message_id"])
@@ -143,10 +158,16 @@ def upgrade() -> None:
         sa.Column("acknowledged_at", sa.DateTime(timezone=True)),
         sa.Column("feedback", sa.String(20)),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.CheckConstraint(
             "insight_type IN ('plateau','deficit_mismatch','low_protein',"
@@ -195,7 +216,10 @@ def upgrade() -> None:
         # The user's local day, so a quota resets at their midnight rather than UTC's.
         sa.Column("local_date", sa.Date(), nullable=False),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.CheckConstraint("status IN ('ok','error','filtered','timeout')", name="status_valid"),
         sa.CheckConstraint("cost_usd >= 0", name="cost_positive"),
@@ -221,7 +245,10 @@ def upgrade() -> None:
             "metadata", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")
         ),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.CheckConstraint(
             "scope IN ('knowledge','user_summary','exercise','food')", name="scope_valid"

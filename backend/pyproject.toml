@@ -128,6 +128,15 @@ filterwarnings = ["error", "ignore::DeprecationWarning:passlib.*"]
 [tool.coverage.run]
 source = ["src/coresync"]
 omit = ["*/migrations/*", "*/tests/*"]
+# Measure with sys.monitoring rather than the legacy C trace function.
+#
+# SQLAlchemy's async layer bridges to sync DBAPI code through greenlets, and the trace
+# function does not follow those stack switches: every repository and use case that runs
+# inside a database call is reported as far less covered than it is. The gap was 10
+# points of total coverage — 77% against 87% for the same 575 passing tests, purely from
+# the measurement core — which is what had been failing CI's 80% gate while the suite was
+# green locally. Requires Python 3.12+, which `requires-python` already guarantees.
+core = "sysmon"
 
 [tool.coverage.report]
 exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\."]
