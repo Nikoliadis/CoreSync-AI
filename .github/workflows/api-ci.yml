@@ -24,8 +24,8 @@ jobs:
       run:
         working-directory: ${{ env.WORKING_DIR }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
       - run: uv python install ${{ env.PYTHON_VERSION }}
@@ -66,8 +66,8 @@ jobs:
       ENVIRONMENT: test
       JWT_SECRET_KEY: ci-secret-key-that-is-long-enough-32b
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
       - run: uv python install ${{ env.PYTHON_VERSION }}
@@ -86,16 +86,22 @@ jobs:
           uv run python -m coresync.infrastructure.seed.runner
           uv run python -m coresync.infrastructure.seed.runner
 
-      - name: Unit tests
-        run: uv run pytest tests/unit -q --cov=coresync --cov-report=xml
-
-      - name: Integration & API tests
-        run: uv run pytest tests/api tests/integration -q --cov=coresync --cov-append --cov-report=xml
+      - name: Tests
+        # One pytest process for the whole suite rather than two with --cov-append.
+        # Appending across processes silently lost the first run's data here — the gate
+        # failed on CI while the identical commands measured 85% locally — and a coverage
+        # total that depends on two processes handing a data file between them is not
+        # worth the marginally faster feedback.
+        # `--cov-report=term` prints the table into the log, so a gate failure says which
+        # modules are uncovered instead of only "exit code 2".
+        run: |
+          uv run pytest tests/unit tests/api tests/integration -q \
+            --cov=coresync --cov-report=xml --cov-report=term
 
       - name: Coverage gate
         run: uv run coverage report --fail-under=80
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: coverage
@@ -111,13 +117,13 @@ jobs:
       run:
         working-directory: ${{ env.WORKING_DIR }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: astral-sh/setup-uv@v3
+      - uses: astral-sh/setup-uv@v9.0.0
       - run: uv python install ${{ env.PYTHON_VERSION }}
       - run: uv sync --all-extras --dev
       - name: Dependency audit
@@ -131,7 +137,7 @@ jobs:
             --all-extras --no-annotate --no-header > requirements.audit.txt
           uv run pip-audit --strict -r requirements.audit.txt
       - name: Container scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: backend
@@ -148,8 +154,8 @@ jobs:
       ENVIRONMENT: test
       JWT_SECRET_KEY: ci-secret-key-that-is-long-enough-32b
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v9.0.0
       - run: uv python install ${{ env.PYTHON_VERSION }}
       - run: uv sync --all-extras --dev
 
@@ -170,7 +176,7 @@ jobs:
           git show origin/${{ github.base_ref }}:backend/openapi.json > base.json 2>/dev/null || exit 0
           npx --yes oasdiff breaking base.json openapi.json --fail-on ERR
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: openapi
           path: ${{ env.WORKING_DIR }}/openapi.json
