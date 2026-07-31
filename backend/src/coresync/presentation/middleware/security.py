@@ -62,6 +62,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._authenticated_limit = settings.rate_limit_authenticated_per_minute
         self._set_logging_limit = settings.rate_limit_set_logging_per_minute
         self._sync_limit = settings.rate_limit_sync_per_minute
+        self._ai_chat_limit = settings.rate_limit_ai_chat_per_minute
 
     def _limit_for(self, request: Request, default: int) -> tuple[int, str]:
         """Per-endpoint overrides on top of the blanket limit.
@@ -77,6 +78,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return self._set_logging_limit, "sets"
         if path.endswith("/workouts/sessions/sync"):
             return self._sync_limit, "sync"
+        # The coach is the expensive endpoint. The daily quota bounds spend but says
+        # nothing about rate, so this is what stops a script using someone's account as
+        # a free LLM proxy — and it covers both the JSON and streaming variants.
+        if path.endswith("/ai/chat") or path.endswith("/ai/chat/stream"):
+            return self._ai_chat_limit, "ai"
         return default, "general"
 
     @staticmethod

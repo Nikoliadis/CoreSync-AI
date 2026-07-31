@@ -7,12 +7,10 @@ constraints and partial indexes carry correctness guarantees a fake cannot repro
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator
 from decimal import Decimal
-from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -38,6 +36,7 @@ from coresync.domain.workout.services import PersonalRecordDetector, VolumeCalcu
 from coresync.infrastructure.database.session import Database
 from coresync.presentation.dependencies import AppContainer
 from coresync.presentation.main import create_app
+from tests.conftest import API_ROOT, subprocess_env
 from tests.fakes import (
     CapturingEmailSender,
     FakeBreachChecker,
@@ -47,44 +46,7 @@ from tests.fakes import (
 )
 from tests.fakes_ai import ScriptedGateway
 
-API_ROOT = Path(__file__).resolve().parents[2]
-
 pytestmark = pytest.mark.integration
-
-
-def subprocess_env(database_url: str) -> dict[str, str]:
-    """The parent environment with the database settings overridden.
-
-    Not a minimal env: on Windows, stripping ``PATH`` and ``SystemRoot`` stops Winsock
-    from initialising and the child dies with ``WinError 10106`` before it runs any of our
-    code. Overriding the keys that matter achieves the actual goal — the child must not
-    inherit a developer's real ``DATABASE_URL`` — without breaking the interpreter.
-    """
-    return {
-        **os.environ,
-        "DATABASE_URL": database_url,
-        "ENVIRONMENT": "test",
-        "JWT_SECRET_KEY": "integration-test-secret-key-32-bytes!",
-    }
-
-
-@pytest.fixture(scope="session")
-def postgres_url() -> Iterator[str]:
-    # `testcontainers.postgres` is deprecated and emits a DeprecationWarning, which
-    # `filterwarnings = ["error"]` turns into a fixture error.
-    from testcontainers.community.postgres import PostgresContainer
-
-    with PostgresContainer("pgvector/pgvector:pg16", driver="asyncpg") as container:
-        url = container.get_connection_url()
-        # Migrations are run rather than metadata.create_all: this is the only way the
-        # test schema is guaranteed to match production, triggers and all.
-        subprocess.run(
-            [sys.executable, "-m", "alembic", "upgrade", "head"],
-            cwd=API_ROOT,
-            check=True,
-            env=subprocess_env(url),
-        )
-        yield url
 
 
 @pytest.fixture(scope="session")

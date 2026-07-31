@@ -26,13 +26,16 @@ export function TopBar({ title, action }: { title?: string; action?: React.React
       <div className="ml-auto flex items-center gap-2">
         {action}
 
-        <button
-          type="button"
+        {/* Goes to the exercise library rather than opening a global palette. A
+            button that looks interactive and does nothing is worse than no button;
+            command-K search belongs with the screens it would actually search. */}
+        <Link
+          href="/exercises"
           className="flex h-11 w-11 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-well hover:text-text"
-          aria-label="Search"
+          aria-label="Search exercises"
         >
           <Search className="h-5 w-5" aria-hidden />
-        </button>
+        </Link>
 
         <Link
           href="/notifications"

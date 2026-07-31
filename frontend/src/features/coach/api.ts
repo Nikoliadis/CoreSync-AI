@@ -100,19 +100,41 @@ export async function* streamChat(
   conversationId?: string,
   signal?: AbortSignal,
 ): AsyncGenerator<StreamEvent> {
-  const response = await fetch(`${API_BASE_URL}/v1/ai/chat/stream`, {
-    method: "POST",
-    credentials: "include",
-    signal,
-    headers: {
-      "Content-Type": "application/json",
-      ...(tokenStore.get() ? { Authorization: `Bearer ${tokenStore.get()}` } : {}),
-    },
-    body: JSON.stringify({ content, conversationId }),
-  });
+  const send = () =>
+    fetch(`${API_BASE_URL}/v1/ai/chat/stream`, {
+      method: "POST",
+      credentials: "include",
+      signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(tokenStore.get() ? { Authorization: `Bearer ${tokenStore.get()}` } : {}),
+      },
+      body: JSON.stringify({ content, conversationId }),
+    });
+
+  let response = await send();
+
+  // This path bypasses `api.*`, so it has to do its own token refresh. Without it,
+  // the first message sent more than 15 minutes into a session fails with a generic
+  // "unavailable" — the access token had simply expired, and every other call in the
+  // app recovers from that silently.
+  if (response.status === 401) {
+    const refreshed = await api.refresh();
+    if (refreshed) {
+      response = await send();
+    }
+  }
 
   if (!response.ok || !response.body) {
-    yield { type: "error", message: "The coach is unavailable right now." };
+    // 402 is the daily quota, not an outage. Saying "unavailable" would send the user
+    // looking for a problem that does not exist.
+    yield {
+      type: "error",
+      message:
+        response.status === 402
+          ? "That's today's coaching limit. It resets tomorrow."
+          : "The coach is unavailable right now.",
+    };
     return;
   }
 

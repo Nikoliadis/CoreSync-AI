@@ -40,7 +40,9 @@ def upgrade() -> None:
         sa.Column("title", sa.String(120), nullable=False),
         sa.Column("body", sa.Text(), nullable=False),
         sa.Column("deep_link", sa.String(200)),
-        sa.Column("data", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")),
+        sa.Column(
+            "data", postgresql.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")
+        ),
         sa.Column("read_at", sa.DateTime(timezone=True)),
         sa.Column(
             "created_at",
