@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Minus, Plus, Timer, X } from "lucide-react";
+import { CheckCircle2, Minus, Plus, Timer, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
 import { PageShell } from "@/components/layout/page-header";
@@ -9,158 +9,146 @@ import { TopBar } from "@/components/layout/topbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { SetRow, type SetRowValue } from "@/features/workouts/components/set-row";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { SessionExercise } from "@/features/workouts/api";
+import { ExercisePicker } from "@/features/workouts/components/exercise-picker";
+import { SetRow } from "@/features/workouts/components/set-row";
+import {
+  useActiveSession,
+  useAddExercise,
+  useCompleteSession,
+  useDiscardSession,
+  useLogSet,
+  useRemoveExercise,
+  useUpdateSet,
+  type PendingSet,
+} from "@/features/workouts/mutations";
+import { useStartSession } from "@/features/workouts/mutations";
 import { formatDuration, useRestTimer } from "@/features/workouts/rest-timer";
+import { uuid7 } from "@/lib/utils/uuid7";
 import { cn } from "@/lib/utils/cn";
-
-type ExerciseBlock = {
-  id: string;
-  name: string;
-  sets: SetRowValue[];
-};
 
 const DEFAULT_REST_SECONDS = 120;
 
-/**
- * The live session logger.
- *
- * Local state for now: the session-write endpoints exist on the backend, but
- * wiring the optimistic set-logging path (docs/07 §3.3) needs the offline queue
- * and the client-generated UUIDv7 ids that make replay idempotent. Until that
- * lands, this screen is honest about being a working surface rather than a
- * persisted one.
- */
 export default function ActiveWorkoutPage() {
-  const [blocks, setBlocks] = useState<ExerciseBlock[]>([]);
+  const session = useActiveSession();
+  const sessionId = session.data?.id;
+
+  const start = useStartSession();
+  const addExercise = useAddExercise(sessionId);
+  const removeExercise = useRemoveExercise(sessionId);
+  const logSet = useLogSet(sessionId);
+  const updateSet = useUpdateSet(sessionId);
+  const complete = useCompleteSession(sessionId);
+  const discard = useDiscardSession(sessionId);
+
+  const [pickerOpen, setPickerOpen] = useState(false);
   const timer = useRestTimer();
 
-  function addExercise() {
-    setBlocks((current) => [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        name: `Exercise ${current.length + 1}`,
-        sets: [
-          {
-            id: crypto.randomUUID(),
-            index: 1,
-            kind: "normal",
-            weightKg: null,
-            reps: null,
-            completed: false,
-          },
-        ],
+  if (session.isLoading) {
+    return (
+      <>
+        <TopBar title="Workout" />
+        <PageShell>
+          <div className="flex flex-col gap-4">
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-48 w-full" />
+          </div>
+        </PageShell>
+      </>
+    );
+  }
+
+  // --- nothing in progress ------------------------------------------------
+  if (!session.data) {
+    return (
+      <>
+        <TopBar title="Workout" />
+        <PageShell>
+          <EmptyState
+            icon={<Timer className="h-8 w-8" />}
+            title="Ready when you are"
+            description="Start a session and log your sets as you go. Everything saves as you tap."
+            action={
+              <Button onClick={() => start.mutate({})} loading={start.isPending}>
+                Start a workout
+              </Button>
+            }
+          />
+        </PageShell>
+      </>
+    );
+  }
+
+  const workout = session.data;
+
+  function logNextSet(exercise: SessionExercise) {
+    const previous = exercise.sets.at(-1);
+    logSet.mutate({
+      sessionExerciseId: exercise.id,
+      input: {
+        // Minted here, before the request — this is what makes a retry idempotent.
+        id: uuid7(),
+        setType: "normal",
+        // Carried forward from the last set: the common case is the same load again,
+        // and retyping it every time is the difference between a fast logger and an
+        // irritating one.
+        reps: previous?.reps ?? null,
+        weightKg: previous?.weightKg ? Number(previous.weightKg) : null,
+        isCompleted: false,
       },
-    ]);
+    });
   }
-
-  function addSet(blockId: string) {
-    setBlocks((current) =>
-      current.map((block) =>
-        block.id === blockId
-          ? {
-              ...block,
-              sets: [
-                ...block.sets,
-                {
-                  id: crypto.randomUUID(),
-                  index: block.sets.length + 1,
-                  kind: "normal",
-                  // Prefilled from the previous set: the overwhelmingly common
-                  // case is the same load again, and retyping it every set is
-                  // the difference between a fast logger and an annoying one.
-                  weightKg: block.sets.at(-1)?.weightKg ?? null,
-                  reps: block.sets.at(-1)?.reps ?? null,
-                  completed: false,
-                },
-              ],
-            }
-          : block,
-      ),
-    );
-  }
-
-  function updateSet(blockId: string, setId: string, next: Partial<SetRowValue>) {
-    setBlocks((current) =>
-      current.map((block) =>
-        block.id === blockId
-          ? { ...block, sets: block.sets.map((s) => (s.id === setId ? { ...s, ...next } : s)) }
-          : block,
-      ),
-    );
-  }
-
-  function toggleComplete(blockId: string, setId: string) {
-    let nowComplete = false;
-    setBlocks((current) =>
-      current.map((block) =>
-        block.id === blockId
-          ? {
-              ...block,
-              sets: block.sets.map((s) => {
-                if (s.id !== setId) return s;
-                nowComplete = !s.completed;
-                return { ...s, completed: nowComplete };
-              }),
-            }
-          : block,
-      ),
-    );
-    // Completing a set starts the rest clock; un-completing one does not.
-    if (nowComplete) timer.start(DEFAULT_REST_SECONDS);
-  }
-
-  const totalSets = blocks.reduce((sum, b) => sum + b.sets.filter((s) => s.completed).length, 0);
-  const totalVolume = blocks.reduce(
-    (sum, b) =>
-      sum +
-      b.sets
-        .filter((s) => s.completed)
-        .reduce((inner, s) => inner + (s.weightKg ?? 0) * (s.reps ?? 0), 0),
-    0,
-  );
 
   return (
     <>
-      <TopBar title="Workout" />
+      <TopBar
+        title="Workout"
+        action={
+          <Button size="sm" onClick={() => complete.mutate()} loading={complete.isPending}>
+            <CheckCircle2 className="h-4 w-4" aria-hidden />
+            Finish
+          </Button>
+        }
+      />
 
       <PageShell className="pb-32">
-        <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="mb-4 grid grid-cols-3 gap-3">
           <Card padding="sm">
-            <p className="text-overline uppercase text-text-muted">Sets done</p>
-            <p className="tabular mt-1 text-h2 text-text">{totalSets}</p>
+            <p className="text-overline uppercase text-text-muted">Sets</p>
+            <p className="tabular mt-1 text-h2 text-text">{workout.totalSets}</p>
           </Card>
           <Card padding="sm">
             <p className="text-overline uppercase text-text-muted">Volume</p>
             <p className="tabular mt-1 text-h2 text-text">
-              {Math.round(totalVolume).toLocaleString()}
+              {Math.round(Number(workout.totalVolumeKg)).toLocaleString()}
               <span className="ml-1 text-caption text-text-muted">kg</span>
             </p>
           </Card>
-          <Card padding="sm" className="col-span-2 sm:col-span-1">
+          <Card padding="sm">
             <p className="text-overline uppercase text-text-muted">Exercises</p>
-            <p className="tabular mt-1 text-h2 text-text">{blocks.length}</p>
+            <p className="tabular mt-1 text-h2 text-text">{workout.exercises.length}</p>
           </Card>
         </div>
 
-        {blocks.length === 0 ? (
+        {workout.exercises.length === 0 ? (
           <EmptyState
-            icon={<Timer className="h-8 w-8" />}
-            title="Ready when you are"
-            description="Add your first exercise and start logging sets."
-            action={<Button onClick={addExercise}>Add exercise</Button>}
+            icon={<Plus className="h-8 w-8" />}
+            title="Add your first exercise"
+            description="Search the catalogue and start logging."
+            action={<Button onClick={() => setPickerOpen(true)}>Add exercise</Button>}
           />
         ) : (
           <div className="flex flex-col gap-4">
-            {blocks.map((block) => (
-              <Card key={block.id}>
+            {workout.exercises.map((exercise) => (
+              <Card key={exercise.id}>
                 <CardHeader>
-                  <CardTitle>{block.name}</CardTitle>
+                  <CardTitle>{exercise.exerciseName}</CardTitle>
                   <button
                     type="button"
-                    onClick={() => setBlocks((c) => c.filter((b) => b.id !== block.id))}
+                    onClick={() => removeExercise.mutate(exercise.id)}
                     className="flex h-9 w-9 items-center justify-center rounded-sm text-text-muted hover:text-critical"
-                    aria-label={`Remove ${block.name}`}
+                    aria-label={`Remove ${exercise.exerciseName}`}
                   >
                     <X className="h-4 w-4" aria-hidden />
                   </button>
@@ -174,30 +162,85 @@ export default function ActiveWorkoutPage() {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  {block.sets.map((set) => (
-                    <SetRow
-                      key={set.id}
-                      value={set}
-                      onChange={(next) => updateSet(block.id, set.id, next)}
-                      onToggleComplete={() => toggleComplete(block.id, set.id)}
-                    />
-                  ))}
+                  {exercise.sets.map((set) => {
+                    const pending = (set as PendingSet).pending === true;
+                    return (
+                      <div
+                        key={set.id}
+                        // Unsaved rows are dimmed rather than hidden or blocked: the
+                        // number is real, it just has not reached the server yet.
+                        className={cn(pending && "opacity-60")}
+                        aria-busy={pending || undefined}
+                      >
+                        <SetRow
+                          value={{
+                            id: set.id,
+                            index: set.setNumber,
+                            kind: set.setType,
+                            weightKg: set.weightKg === null ? null : Number(set.weightKg),
+                            reps: set.reps,
+                            completed: set.isCompleted,
+                          }}
+                          onChange={(next) =>
+                            updateSet.mutate({
+                              sessionExerciseId: exercise.id,
+                              setId: set.id,
+                              input: {
+                                reps: next.reps,
+                                weightKg: next.weightKg,
+                              },
+                            })
+                          }
+                          onToggleComplete={() => {
+                            const nowComplete = !set.isCompleted;
+                            updateSet.mutate({
+                              sessionExerciseId: exercise.id,
+                              setId: set.id,
+                              input: { isCompleted: nowComplete },
+                            });
+                            if (nowComplete) timer.start(DEFAULT_REST_SECONDS);
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
 
-                <Button variant="ghost" size="sm" className="mt-2" onClick={() => addSet(block.id)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => logNextSet(exercise)}
+                >
                   <Plus className="h-4 w-4" aria-hidden />
                   Add set
                 </Button>
               </Card>
             ))}
 
-            <Button variant="secondary" onClick={addExercise}>
+            <Button variant="secondary" onClick={() => setPickerOpen(true)}>
               <Plus className="h-4 w-4" aria-hidden />
               Add exercise
+            </Button>
+
+            <Button
+              variant="ghost"
+              className="text-text-muted hover:text-critical"
+              onClick={() => discard.mutate()}
+              loading={discard.isPending}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden />
+              Discard workout
             </Button>
           </div>
         )}
       </PageShell>
+
+      <ExercisePicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onPick={(exerciseId) => addExercise.mutate(exerciseId)}
+      />
 
       {/* --- rest timer -------------------------------------------------- */}
       <AnimatePresence>
@@ -207,12 +250,7 @@ export default function ActiveWorkoutPage() {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ duration: 0.26, ease: [0.2, 0, 0, 1] }}
-            className={cn(
-              "fixed inset-x-0 z-40 mx-auto max-w-md px-4",
-              // Clears the mobile tab bar; sits at the bottom on desktop too,
-              // because that is where the thumb and the eye already are.
-              "bottom-20 lg:bottom-6",
-            )}
+            className="fixed inset-x-0 bottom-20 z-40 mx-auto max-w-md px-4 lg:bottom-6"
           >
             <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-raised p-3 shadow-e3">
               <Timer className="h-5 w-5 shrink-0 text-accent-text" aria-hidden />
