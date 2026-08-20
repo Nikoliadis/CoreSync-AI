@@ -1,5 +1,6 @@
 import {
   Apple,
+  ClipboardList,
   BarChart3,
   Bell,
   Bot,
@@ -44,6 +45,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { href: "/workouts/active", label: "Workout Tracker", icon: Dumbbell },
+      { href: "/workouts/routines", label: "Routines", icon: ClipboardList },
       { href: "/workouts", label: "History", icon: History },
       { href: "/exercises", label: "Exercise Library", icon: Library },
       { href: "/calendar", label: "Calendar", icon: CalendarDays },

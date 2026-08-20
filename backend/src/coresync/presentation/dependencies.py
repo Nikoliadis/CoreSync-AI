@@ -15,6 +15,10 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.asyncio import Redis
 
+from coresync.application.achievements.use_cases import (
+    EvaluateAchievementsUseCase,
+    ListAchievementsUseCase,
+)
 from coresync.application.admin.use_cases import GetPlatformStatsUseCase, ListUsersUseCase
 from coresync.application.catalog.use_cases import (
     CreateCustomExerciseUseCase,
@@ -74,6 +78,7 @@ from coresync.application.notifications.use_cases import (
     ListNotificationsUseCase,
     MarkNotificationReadUseCase,
     NotificationPreferencesUseCase,
+    PublishNotificationUseCase,
 )
 from coresync.application.profile.use_cases import (
     CompleteOnboardingUseCase,
@@ -654,6 +659,18 @@ def mark_notification_read_use_case(c: Container, uow: Uow) -> MarkNotificationR
 
 def notification_prefs_use_case(uow: Uow) -> NotificationPreferencesUseCase:
     return NotificationPreferencesUseCase(uow=uow)
+
+
+def list_achievements_use_case(uow: Uow) -> ListAchievementsUseCase:
+    return ListAchievementsUseCase(uow=uow)
+
+
+def evaluate_achievements_use_case(c: Container, uow: Uow) -> EvaluateAchievementsUseCase:
+    # The publisher writes the notification in the same transaction as the award, so a
+    # crash cannot leave a badge granted silently.
+    return EvaluateAchievementsUseCase(
+        uow=uow, clock=c.clock, publisher=PublishNotificationUseCase(uow=uow, clock=c.clock)
+    )
 
 
 def platform_stats_use_case(c: Container, uow: Uow) -> GetPlatformStatsUseCase:

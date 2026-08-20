@@ -10,6 +10,7 @@ from __future__ import annotations
 from types import TracebackType
 from typing import Protocol
 
+from coresync.domain.achievements.repositories import AchievementRepository
 from coresync.domain.admin.repositories import AdminReadRepository
 from coresync.domain.catalog.repositories import (
     CatalogReferenceRepository,
@@ -87,6 +88,7 @@ class UnitOfWork(Protocol):
     notification_outbox: OutboxRepository
     notification_preferences: NotificationPreferencesRepository
     admin: AdminReadRepository
+    achievements: AchievementRepository
 
     async def __aenter__(self) -> UnitOfWork: ...
 

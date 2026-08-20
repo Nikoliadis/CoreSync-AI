@@ -6,6 +6,7 @@ silently missing from migrations.
 """
 
 from coresync.infrastructure.database.base import Base
+from coresync.infrastructure.database.models.achievements import UserAchievementModel
 from coresync.infrastructure.database.models.aggregates import (
     DailyActivitySummaryModel,
     ExerciseStatisticsModel,
@@ -102,6 +103,7 @@ __all__ = [
     "SessionSetModel",
     "SingleUseTokenModel",
     "SyncOperationModel",
+    "UserAchievementModel",
     "UserDeviceModel",
     "UserFavoriteExerciseModel",
     "UserModel",

@@ -9,6 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from coresync.presentation.api.v1 import (
+    achievements,
     admin,
     ai,
     auth,
@@ -34,6 +35,7 @@ api_router.include_router(sessions.router)
 api_router.include_router(progress.router)
 api_router.include_router(ai.router)
 api_router.include_router(notifications.router)
+api_router.include_router(achievements.router)
 # Admin last: an internal surface should never shadow a user-facing route.
 api_router.include_router(admin.router)
 
