@@ -33,6 +33,12 @@ from coresync.infrastructure.database.repositories.notifications import (
     SqlAlchemyNotificationRepository,
     SqlAlchemyOutboxRepository,
 )
+from coresync.infrastructure.database.repositories.nutrition import (
+    SqlAlchemyDiaryRepository,
+    SqlAlchemyFoodRepository,
+    SqlAlchemyRecipeRepository,
+    SqlAlchemyWaterRepository,
+)
 from coresync.infrastructure.database.repositories.profile import (
     SqlAlchemyGoalRepository,
     SqlAlchemyNutritionTargetRepository,
@@ -115,6 +121,10 @@ class SqlAlchemyUnitOfWork:
         self.notification_preferences = SqlAlchemyNotificationPreferencesRepository(session)
         self.admin = SqlAlchemyAdminReadRepository(session)
         self.achievements = SqlAlchemyAchievementRepository(session)
+        self.foods = SqlAlchemyFoodRepository(session)
+        self.diary = SqlAlchemyDiaryRepository(session)
+        self.water = SqlAlchemyWaterRepository(session)
+        self.recipes = SqlAlchemyRecipeRepository(session)
 
     async def __aexit__(
         self,

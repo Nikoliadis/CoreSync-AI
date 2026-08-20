@@ -80,6 +80,14 @@ from coresync.application.notifications.use_cases import (
     NotificationPreferencesUseCase,
     PublishNotificationUseCase,
 )
+from coresync.application.nutrition.use_cases import (
+    CreateCustomFoodUseCase,
+    DeleteDiaryEntryUseCase,
+    GetDiaryUseCase,
+    LogFoodUseCase,
+    LogWaterUseCase,
+    SearchFoodsUseCase,
+)
 from coresync.application.profile.use_cases import (
     CompleteOnboardingUseCase,
     GetMeUseCase,
@@ -659,6 +667,30 @@ def mark_notification_read_use_case(c: Container, uow: Uow) -> MarkNotificationR
 
 def notification_prefs_use_case(uow: Uow) -> NotificationPreferencesUseCase:
     return NotificationPreferencesUseCase(uow=uow)
+
+
+def search_foods_use_case(uow: Uow) -> SearchFoodsUseCase:
+    return SearchFoodsUseCase(uow=uow)
+
+
+def create_food_use_case(uow: Uow) -> CreateCustomFoodUseCase:
+    return CreateCustomFoodUseCase(uow=uow)
+
+
+def log_food_use_case(c: Container, uow: Uow) -> LogFoodUseCase:
+    return LogFoodUseCase(uow=uow, clock=c.clock)
+
+
+def get_diary_use_case(c: Container, uow: Uow) -> GetDiaryUseCase:
+    return GetDiaryUseCase(uow=uow, clock=c.clock)
+
+
+def delete_diary_entry_use_case(uow: Uow) -> DeleteDiaryEntryUseCase:
+    return DeleteDiaryEntryUseCase(uow=uow)
+
+
+def log_water_use_case(c: Container, uow: Uow) -> LogWaterUseCase:
+    return LogWaterUseCase(uow=uow, clock=c.clock)
 
 
 def list_achievements_use_case(uow: Uow) -> ListAchievementsUseCase:

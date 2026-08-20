@@ -35,6 +35,12 @@ from coresync.domain.notifications.repositories import (
     NotificationRepository,
     OutboxRepository,
 )
+from coresync.domain.nutrition.repositories import (
+    DiaryRepository,
+    FoodRepository,
+    RecipeRepository,
+    WaterRepository,
+)
 from coresync.domain.profile.repositories import (
     GoalRepository,
     NutritionTargetRepository,
@@ -89,6 +95,10 @@ class UnitOfWork(Protocol):
     notification_preferences: NotificationPreferencesRepository
     admin: AdminReadRepository
     achievements: AchievementRepository
+    foods: FoodRepository
+    diary: DiaryRepository
+    water: WaterRepository
+    recipes: RecipeRepository
 
     async def __aenter__(self) -> UnitOfWork: ...
 

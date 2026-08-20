@@ -84,6 +84,10 @@ ignore = [
 # The catalog is a data table, one exercise per line. Wrapping the rows would make the
 # library unreadable in a diff, which is the whole point of the tabular form.
 "src/coresync/infrastructure/seed/exercises.py" = ["E501"]
+# Greek food names, deliberately. RUF001 reads γ as a possible typo for y — a useful
+# rule in code, a false positive in a Greek data table. Scoped to this one file so the
+# check keeps working everywhere else; it caught real en-dash confusables elsewhere.
+"src/coresync/infrastructure/seed/foods.py" = ["E501", "RUF001"]
 # `PgUUID` is the conventional alias for postgresql.UUID and reads better than the
 # alternative of shadowing the stdlib name.
 "src/coresync/infrastructure/database/models/*" = ["N811"]
