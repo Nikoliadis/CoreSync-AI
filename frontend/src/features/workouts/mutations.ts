@@ -10,6 +10,7 @@ import {
   type SessionSet,
   type WorkoutSession,
 } from "@/features/workouts/api";
+import { enqueue } from "@/lib/offline/sync-engine";
 import { uuid7 } from "@/lib/utils/uuid7";
 
 /** A set that is on screen but not yet acknowledged by the server. */
@@ -95,7 +96,7 @@ export function useLogSet(sessionId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       sessionExerciseId,
       input,
     }: {
@@ -103,7 +104,16 @@ export function useLogSet(sessionId: string | undefined) {
       input: LogSetInput;
     }) => {
       if (!sessionId) throw new Error("no active session");
-      return workoutsApi.logSet(sessionId, sessionExerciseId, input);
+
+      // Written to the log first, then sent. A set logged in a basement gym with no
+      // signal is durable the moment the user taps, and the engine drains it when the
+      // phone reconnects — rather than the mutation failing and the set being lost.
+      await enqueue({
+        opId: uuid7(),
+        type: "set.log",
+        at: new Date().toISOString(),
+        payload: { sessionId, sessionExerciseId, ...input },
+      });
     },
 
     onMutate: async ({ sessionExerciseId, input }) => {
@@ -140,32 +150,39 @@ export function useLogSet(sessionId: string | undefined) {
     },
 
     onError: (_error, _variables, context) => {
+      // Only reached if the *log itself* failed — storage denied, quota exhausted. A
+      // network failure never lands here, because the durable write already succeeded.
       if (context?.previous) {
         queryClient.setQueryData(workoutKeys.active(), context.previous);
       }
-      toast.error("Set not saved", { description: "Check your connection and try again." });
+      toast.error("Set not saved", { description: "Storage is unavailable on this device." });
     },
 
-    onSuccess: (serverSet, { sessionExerciseId }) => {
-      // Swap the optimistic row for the server's, which carries the real set number
-      // and the estimated 1RM the client cannot compute.
+    onSuccess: (_result, { sessionExerciseId, input }) => {
+      // The row is durable once it is in the log, so `pending` is cleared here rather
+      // than waiting for the server. The estimated 1RM stays null until the next read
+      // of the session — the client cannot compute it, and inventing one would put a
+      // number on screen that no server ever agreed to.
       replaceSession(queryClient, (session) => ({
         ...session,
         exercises: session.exercises.map((exercise) =>
           exercise.id === sessionExerciseId
             ? {
                 ...exercise,
-                sets: exercise.sets.map((s) => (s.id === serverSet.id ? serverSet : s)),
+                sets: exercise.sets.map((s) =>
+                  s.id === input.id ? ({ ...s, pending: false } as PendingSet) : s,
+                ),
               }
             : exercise,
         ),
       }));
     },
 
-    // Deliberately no invalidation: a refetch mid-workout stalls the UI on a gym
-    // connection, and the optimistic state is already correct.
-    retry: 3,
-    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+    // No retry, and no invalidation. The log *is* the retry, and retrying the enqueue
+    // would write the same set several times under different operation ids. A refetch
+    // mid-workout would also stall the UI on exactly the connection that cannot afford
+    // it, and the optimistic state is already correct.
+    retry: false,
   });
 }
 
@@ -173,7 +190,7 @@ export function useUpdateSet(sessionId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       sessionExerciseId,
       setId,
       input,
@@ -183,7 +200,16 @@ export function useUpdateSet(sessionId: string | undefined) {
       input: Partial<LogSetInput>;
     }) => {
       if (!sessionId) throw new Error("no active session");
-      return workoutsApi.updateSet(sessionId, sessionExerciseId, setId, input);
+
+      // Through the log for the same reason as logging: ticking a set complete is the
+      // most frequent action in a session, and the log preserves order, so an update
+      // can never overtake the `set.log` that created the row.
+      await enqueue({
+        opId: uuid7(),
+        type: "set.update",
+        at: new Date().toISOString(),
+        payload: { sessionId, sessionExerciseId, setId, ...input },
+      });
     },
 
     onMutate: async ({ sessionExerciseId, setId, input }) => {
@@ -221,11 +247,11 @@ export function useUpdateSet(sessionId: string | undefined) {
       if (context?.previous) {
         queryClient.setQueryData(workoutKeys.active(), context.previous);
       }
-      toast.error("Change not saved");
+      toast.error("Change not saved", { description: "Storage is unavailable on this device." });
     },
 
-    retry: 3,
-    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+    // As with logging: the log is the retry.
+    retry: false,
   });
 }
 

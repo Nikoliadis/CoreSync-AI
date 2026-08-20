@@ -4,6 +4,7 @@ import { Bell, Search } from "lucide-react";
 import Link from "next/link";
 
 import { Logo } from "@/components/layout/logo";
+import { SyncIndicator } from "@/components/layout/sync-indicator";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { cn } from "@/lib/utils/cn";
 
@@ -24,6 +25,7 @@ export function TopBar({ title, action }: { title?: string; action?: React.React
       {title && <h1 className="hidden truncate text-h2 lg:block">{title}</h1>}
 
       <div className="ml-auto flex items-center gap-2">
+        <SyncIndicator />
         {action}
 
         {/* Goes to the exercise library rather than opening a global palette. A
