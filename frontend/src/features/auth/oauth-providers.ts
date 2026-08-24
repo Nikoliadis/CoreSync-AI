@@ -121,7 +121,7 @@ declare global {
  */
 export async function renderGoogleButton(
   parent: HTMLElement,
-  options: { theme: "outline" | "filled_black"; width: number },
+  options: { theme: "outline" | "filled_black"; locale?: string },
 ): Promise<OAuthResult> {
   if (!GOOGLE_CLIENT_ID) throw new Error("Google sign-in is not configured");
   await loadScript(GOOGLE_SRC);
@@ -145,14 +145,16 @@ export async function renderGoogleButton(
       },
     });
 
+    // `type: "icon"` is an officially supported variant, so a mark-only button stays
+    // inside Google's branding terms — which a hand-drawn G would not. It also sidesteps
+    // the localisation mismatch entirely: there is no text left to render in the wrong
+    // language.
     google.accounts.id.renderButton(parent, {
-      type: "standard",
+      type: "icon",
       theme: options.theme,
       size: "large",
-      shape: "rectangular",
-      text: "continue_with",
-      width: options.width,
-      logo_alignment: "center",
+      shape: "square",
+      locale: options.locale ?? "en",
     });
   });
 }

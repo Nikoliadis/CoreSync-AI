@@ -69,7 +69,6 @@ export function SocialSignIn({ onSuccess, dividerLabel = "or" }: Props) {
     // click handler, so the promise is set up once when the slot mounts.
     renderGoogleButton(googleSlot.current, {
       theme: resolvedTheme === "light" ? "outline" : "filled_black",
-      width: 320,
     })
       .then((result) => {
         if (!cancelled) void exchange("google", result);
@@ -81,7 +80,7 @@ export function SocialSignIn({ onSuccess, dividerLabel = "or" }: Props) {
     return () => {
       cancelled = true;
     };
-    // Re-rendered on theme change so the button matches the page it sits on.
+    // Re-rendered on theme change so the mark matches the page it sits on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasGoogle, resolvedTheme]);
 
@@ -101,30 +100,41 @@ export function SocialSignIn({ onSuccess, dividerLabel = "or" }: Props) {
         </p>
       )}
 
-      {hasGoogle && (
-        // Google's own rendered button: their branding terms require it, and it is the
-        // only variant that gets FedCM and One Tap behaviour.
-        <div ref={googleSlot} className="flex justify-center [color-scheme:light]" />
-      )}
+      {/* Marks only, side by side. Both squares are 44pt so they clear the touch
+          target floor — an icon button that is merely icon-sized is the classic way to
+          make something unusable on a phone. */}
+      <div className="flex items-center justify-center gap-3">
+        {hasGoogle && (
+          // Google's own rendered mark, not a hand-drawn one: their branding terms
+          // require it, and it is also what gets FedCM and One Tap. Their icon button
+          // renders at 40px, so the wrapper squares it up to 44.
+          <div
+            ref={googleSlot}
+            className="h-11 w-11 overflow-hidden rounded-md [&_div[role=button]]:!h-11 [&_div[role=button]]:!w-11 [&_div[role=button]]:!rounded-md [&_iframe]:!h-11 [&_iframe]:!w-11"
+          />
+        )}
 
-      {hasApple && (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            void signInWithApple()
-              .then((result) => exchange("apple", result))
-              .catch(() => {
-                // A closed popup is not an error worth shouting about — the user
-                // changed their mind, which is a normal thing to do.
-              });
-          }}
-          className="flex h-11 w-full items-center justify-center gap-2 rounded-md border border-border bg-surface-raised text-body text-text transition-colors hover:bg-surface-well disabled:opacity-50"
-        >
-          <AppleMark />
-          Continue with Apple
-        </button>
-      )}
+        {hasApple && (
+          <button
+            type="button"
+            disabled={busy}
+            // The label carries what the mark no longer says. Without it a screen
+            // reader announces "button" and nothing else.
+            aria-label="Continue with Apple"
+            onClick={() => {
+              void signInWithApple()
+                .then((result) => exchange("apple", result))
+                .catch(() => {
+                  // A closed popup is not an error worth shouting about — the user
+                  // changed their mind, which is a normal thing to do.
+                });
+            }}
+            className="flex h-11 w-11 items-center justify-center rounded-md border border-border bg-surface-raised text-text transition-colors hover:bg-surface-well disabled:opacity-50"
+          >
+            <AppleMark />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
