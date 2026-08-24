@@ -15,16 +15,23 @@
 import { openDatabase } from "./database";
 import { uuid7 } from "@/lib/utils/uuid7";
 
+/**
+ * Exactly the operations `SyncWorkoutsUseCase._HANDLERS` dispatches on.
+ *
+ * Kept in lockstep deliberately: the server answers an unknown type with `rejected`,
+ * and a rejection is terminal here — so a typo in this union is silent data loss rather
+ * than an error anybody sees. Nutrition and water are absent because the sync endpoint
+ * does not handle them; those go through their own online endpoints.
+ */
 export type OperationType =
+  | "session.create"
+  | "session.update"
+  | "exercise.add"
   | "set.log"
   | "set.update"
   | "set.delete"
-  | "session.start"
   | "session.complete"
-  | "diary.create"
-  | "diary.update"
-  | "diary.delete"
-  | "water.log";
+  | "session.discard";
 
 export type Operation = {
   opId: string;

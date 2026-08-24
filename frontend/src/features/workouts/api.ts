@@ -57,10 +57,17 @@ export const workoutKeys = {
 };
 
 export const workoutsApi = {
-  /** Returns null rather than throwing when nothing is in progress. */
+  /**
+   * Returns null rather than throwing when nothing is in progress.
+   *
+   * The endpoint answers 204 for "no active session", which the client turns into
+   * `undefined` — not an error, so the catch below never sees it. TanStack Query
+   * rejects `undefined` outright, so the coalesce is what makes "nothing in progress"
+   * a value rather than a console error on every dashboard load.
+   */
   active: async (): Promise<WorkoutSession | null> => {
     try {
-      return await api.get<WorkoutSession>("/v1/workouts/sessions/active");
+      return (await api.get<WorkoutSession>("/v1/workouts/sessions/active")) ?? null;
     } catch {
       return null;
     }

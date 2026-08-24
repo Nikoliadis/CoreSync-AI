@@ -67,10 +67,16 @@ export const dashboardApi = {
     return data.items[0] ?? null;
   },
 
-  /** Null rather than an error when nothing is in progress — that is the normal case. */
+  /**
+   * Null rather than an error when nothing is in progress — that is the normal case.
+   *
+   * The endpoint answers 204, which the client turns into `undefined` rather than
+   * throwing, so the catch never fires. TanStack Query rejects `undefined`, so the
+   * coalesce is what keeps "no workout right now" from becoming an error.
+   */
   activeSession: async (): Promise<ActiveSession | null> => {
     try {
-      return await api.get<ActiveSession>("/v1/workouts/sessions/active");
+      return (await api.get<ActiveSession>("/v1/workouts/sessions/active")) ?? null;
     } catch {
       return null;
     }

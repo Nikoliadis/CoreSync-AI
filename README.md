@@ -3,10 +3,18 @@
 A production-grade fitness ecosystem: workout tracking, nutrition logging, body progress,
 and an AI coach — on web, iOS and Android, backed by a single cloud API.
 
-> **Status:** Phase 2 (Workout Tracking) — API complete. Exercise catalog, routines, live
-> session logging, personal records, history and the offline `/sync` contract are
-> implemented and tested; the offline-first mobile client is not yet built. The complete
-> technical blueprint lives in `docs/`; the phased delivery plan is in
+> **Status:** backend and web are built; mobile is in progress.
+>
+> | | State |
+> |---|---|
+> | **Backend** | Phases 0–5 complete. 124 endpoints, 57 tables, 13 migrations, 942 tests |
+> | **Web** | Every screen except progress photos, meal planner and calendar. 86 tests |
+> | **Mobile** | Foundation and the active workout. Nutrition, progress and coach are next |
+> | **Workers** | Notification outbox and account erasure running on Celery beat |
+>
+> Not built yet: progress photos (no blob storage), meal planner, calendar, admin UI, web
+> i18n, accessibility beyond the public routes, load testing, penetration testing, store
+> submission. The blueprint is in `docs/`; the phased plan is in
 > [docs/15-roadmap.md](docs/15-roadmap.md).
 
 **Naming:** the product is *CoreSync AI*. In code, config and infrastructure the short
@@ -17,13 +25,17 @@ form `coresync` is used — Python package `coresync`, database `coresync`, API 
 
 ## What it is
 
-| Pillar | Comparable to | What CoreSync does |
-|---|---|---|
-| Workout tracking | Strong, Hevy | Routines, live session logging, supersets, drop sets, rest timer, PR detection, history |
-| Nutrition tracking | MyFitnessPal | Food search, barcode scan, custom foods, recipes, macros + micronutrients, water |
-| Adaptive training | Fitbod | Recovery-aware workout generation, progressive overload, plateau detection |
-| AI coach | — | Context-aware chat, weekly/monthly reports, meal & training plans, progress-photo analysis |
-| Social | Strava-lite | Follows, likes, achievements, challenges, leaderboards |
+The product as designed. The **Built** column is what exists today — the status block
+above is the short version.
+
+| Pillar | Comparable to | What CoreSync does | Built |
+|---|---|---|---|
+| Workout tracking | Strong, Hevy | Routines, live session logging, supersets, drop sets, rest timer, PR detection, history | ✅ |
+| Nutrition tracking | MyFitnessPal | Food search, barcode scan, custom foods, recipes, macros + micronutrients, water | ✅ |
+| AI coach | — | Context-aware chat, weekly reports, tool calling over the user's own data | ✅ chat and reports; no photo analysis |
+| Achievements | — | Definitions, evaluation, streaks | ✅ |
+| Adaptive training | Fitbod | Recovery-aware workout generation, progressive overload, plateau detection | ❌ |
+| Social | Strava-lite | Follows, likes, challenges, leaderboards | ❌ out of MVP by design |
 
 ## Documentation map
 
@@ -80,23 +92,71 @@ Two boundaries in that tree are deliberate and easy to get wrong:
 
 **Backend** — Python 3.12 · FastAPI · SQLAlchemy 2.0 (async) · Alembic · PostgreSQL 16 (+ pgvector) · Redis · Celery · Pydantic v2
 
-**Web** — Next.js 15 (App Router) · React 19 · TypeScript · TailwindCSS · TanStack Query · Zustand
+**Web** — Next.js 16 (App Router) · React 19 · TypeScript · Tailwind v4 · TanStack Query · Zustand · React Hook Form + Zod
 
-**Mobile** — React Native · Expo (dev client) · NativeWind · TanStack Query · MMKV/SQLite offline store
+**Mobile** — React Native 0.76 · Expo SDK 52 · Expo Router · TypeScript · TanStack Query · Zustand · expo-sqlite offline store · expo-secure-store
 
 **AI** — Azure OpenAI (primary) behind a provider-agnostic gateway · pgvector for retrieval
 
 **Cloud** — Azure App Service · Azure Database for PostgreSQL Flexible Server · Azure Cache for Redis · Azure Blob Storage + Front Door CDN · Key Vault · Application Insights · Vercel (web)
 
-## Local development (target state)
+## Running it locally
+
+The full stack in containers:
 
 ```bash
 cp .env.example .env          # fill in secrets
 docker compose up -d          # postgres, redis, api, worker, beat, mailhog, minio
 docker compose exec api alembic upgrade head
-docker compose exec api python -m coresync.infrastructure.seed.runner   # exercise catalog
-# API      → http://localhost:8000/docs
-# Web      → http://localhost:3000
+docker compose exec api python -m coresync.infrastructure.seed.runner
+```
+
+Or run the services directly against containerised infrastructure, which is what most
+day-to-day work looks like:
+
+```bash
+docker compose up -d postgres redis
+
+cd backend
+uv sync --all-extras --dev
+uv run alembic upgrade head
+uv run python -m coresync.infrastructure.seed.runner    # exercises, nutrients, foods
+uv run uvicorn coresync.presentation.main:app --port 8000
+
+cd ../frontend
+npm install && npm run dev
+```
+
+| | |
+|---|---|
+| API docs | http://localhost:8000/docs |
+| Web | http://localhost:3000 |
+
+**Verifying an account in development.** Registration requires email verification and
+there is no mail server unless you run the full Compose stack. The `ConsoleEmailSender`
+prints the verification token to the API log — copy it from there. With Compose, MailHog
+catches the mail instead, at http://localhost:8025.
+
+### Mobile
+
+```bash
+cd mobile
+npm install
+npx expo start                # then press i / a, or scan with Expo Go
+```
+
+The app reads `EXPO_PUBLIC_API_URL`, defaulting to `http://localhost:8000`. A physical
+device needs your machine's LAN address rather than localhost.
+
+### Background workers
+
+Scheduled work — draining the notification outbox, erasing accounts past their grace
+period — needs both processes. Compose runs them; standalone they are:
+
+```bash
+cd backend
+uv run celery -A coresync.infrastructure.worker.app worker -l info
+uv run celery -A coresync.infrastructure.worker.app beat -l info      # exactly one
 ```
 
 ## Conventions
@@ -107,6 +167,13 @@ docker compose exec api python -m coresync.infrastructure.seed.runner   # exerci
 - **Timestamps:** `timestamptz` in UTC. "Days" that matter to the user (diary dates, streaks) are
   stored as `date` in the *user's* timezone, computed at write time.
 - **Money & measurements:** `numeric`, never `float`.
+- **Offline writes:** the mobile client mints UUIDv7 ids before a write leaves the device,
+  so a replayed sync is idempotent — the same primary key arrives twice and the second is
+  a no-op rather than a duplicate set.
+- **Energy reconciliation:** stored calories must agree with the macros that imply them,
+  counting alcohol at 7 kcal/g alongside the usual 4/4/9. A database constraint enforces
+  it, because a food that reports half the calories it contains is worse than no food at
+  all.
 
 ## Licence
 
