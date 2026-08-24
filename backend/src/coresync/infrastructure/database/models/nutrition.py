@@ -12,6 +12,7 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
+    FetchedValue,
     ForeignKey,
     Index,
     Integer,
@@ -20,7 +21,7 @@ from sqlalchemy import (
     Text,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -72,6 +73,12 @@ class FoodModel(SoftDeleteMixin, TimestampMixin, Base):
     is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     is_liquid: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     usage_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    # Maintained by PostgreSQL: a STORED generated column over the unaccented name
+    # (migration 0008). Declared here because the search query references it, and
+    # read-only because writing to a generated column is an error, not a no-op.
+    search_vector: Mapped[str | None] = mapped_column(
+        TSVECTOR, nullable=True, server_default=FetchedValue()
+    )
 
     servings: Mapped[list[FoodServingModel]] = relationship(
         back_populates="food", cascade="all, delete-orphan", lazy="selectin"

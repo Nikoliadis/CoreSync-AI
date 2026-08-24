@@ -16,6 +16,7 @@ from coresync.domain.coaching.context import (
     ContextFlag,
     CurrentContext,
     FlagDetector,
+    NutritionWindow,
     ProfileContext,
     StalledExercise,
     TrainingWindow,
@@ -65,6 +66,7 @@ def _context(
     streak: int = 3,
     stalled: list[StalledExercise] | None = None,
     goal: str | None = "lose_fat",
+    nutrition: NutritionWindow | None = None,
 ) -> CoachContext:
     return CoachContext(
         today=TODAY,
@@ -81,6 +83,19 @@ def _context(
         stalled_exercises=stalled or [],
         days_since_last_workout=days_since,
         workout_streak=streak,
+        nutrition=nutrition,
+    )
+
+
+def _nutrition(*, days_logged: int = 5, calories: str = "2180") -> NutritionWindow:
+    return NutritionWindow(
+        days_in_window=7,
+        days_logged=days_logged,
+        avg_calories=Decimal(calories),
+        avg_protein_g=Decimal("158.0"),
+        avg_carbs_g=Decimal("210.0"),
+        avg_fat_g=Decimal("72.0"),
+        avg_water_ml=Decimal("1900.0"),
     )
 
 
@@ -186,13 +201,33 @@ class TestPlateau:
 
 
 class TestNutritionHonesty:
-    def test_nutrition_is_always_reported_as_untracked(self) -> None:
-        """Phase 3 does not exist. The coach is told so rather than shown zeros."""
+    def test_no_diary_at_all_is_reported_as_untracked(self) -> None:
+        """Null, not zero. A coach shown 0 kcal gives confident, wrong advice."""
         assert ContextFlag.NUTRITION_NOT_TRACKED in detector.detect(_context())
 
     def test_the_prompt_bundle_states_nutrition_is_null_not_zero(self) -> None:
         bundle = _context().to_prompt_dict()
         assert bundle["nutrition"] is None
+
+    def test_a_well_logged_week_clears_the_flag(self) -> None:
+        flags = detector.detect(_context(nutrition=_nutrition(days_logged=5)))
+        assert ContextFlag.NUTRITION_NOT_TRACKED not in flags
+
+    def test_one_logged_day_is_still_untracked(self) -> None:
+        """An anecdote is not a weekly intake.
+
+        Someone who logged a single Tuesday has not told us what they eat, and averaging
+        that one day into advice about their diet is worse than admitting we do not know.
+        """
+        flags = detector.detect(_context(nutrition=_nutrition(days_logged=1)))
+        assert ContextFlag.NUTRITION_NOT_TRACKED in flags
+
+    def test_the_bundle_carries_the_logging_denominator(self) -> None:
+        """The coach must be able to see how much of the week the average covers."""
+        bundle = _context(nutrition=_nutrition(days_logged=4)).to_prompt_dict()
+        assert bundle["nutrition"]["daysLogged"] == 4
+        assert bundle["nutrition"]["daysInWindow"] == 7
+        assert bundle["nutrition"]["avgCalories"] == "2180"
 
     def test_the_bundle_keeps_decimals_exact_as_strings(self) -> None:
         bundle = _context(rate="-0.55").to_prompt_dict()

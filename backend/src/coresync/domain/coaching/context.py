@@ -69,6 +69,25 @@ class TrainingWindow:
 
 
 @dataclass(frozen=True, slots=True)
+class NutritionWindow:
+    """What they actually ate, over the days they actually logged.
+
+    ``days_logged`` is reported alongside the averages and the averages divide by it,
+    not by ``days_in_window``. Dividing by elapsed days would turn three logged days out
+    of seven into an apparent 1,000 kcal deficit, and the coach would confidently tell
+    someone eating enough to eat more. Partial logging is the norm, not the exception.
+    """
+
+    days_in_window: int
+    days_logged: int
+    avg_calories: Decimal
+    avg_protein_g: Decimal
+    avg_carbs_g: Decimal
+    avg_fat_g: Decimal
+    avg_water_ml: Decimal
+
+
+@dataclass(frozen=True, slots=True)
 class RecentPR:
     exercise: str
     record_type: str
@@ -87,9 +106,9 @@ class StalledExercise:
 class CoachContext:
     """Everything the coach is told before it asks a single tool.
 
-    ``nutrition`` is deliberately absent rather than zeroed while the nutrition domain
-    does not exist. Telling a coach the user ate 0 kcal would produce confident, wrong
-    advice; telling it nutrition is untracked produces the right question.
+    ``nutrition`` stays ``None`` when the user has logged nothing in the window. That is
+    not the same as zero: telling a coach someone ate 0 kcal produces confident, wrong
+    advice, while telling it intake is untracked produces the right question.
     """
 
     today: date
@@ -102,6 +121,7 @@ class CoachContext:
     flags: list[ContextFlag] = field(default_factory=list)
     days_since_last_workout: int | None = None
     workout_streak: int = 0
+    nutrition: NutritionWindow | None = None
 
     def to_prompt_dict(self) -> dict[str, Any]:
         """Compact JSON for the prompt. Decimals become strings to stay exact."""
@@ -151,9 +171,19 @@ class CoachContext:
             ],
             "daysSinceLastWorkout": self.days_since_last_workout,
             "workoutStreak": self.workout_streak,
-            # Nutrition is genuinely unavailable, not zero. Stated explicitly so the coach
-            # asks rather than assumes.
-            "nutrition": None,
+            # Null means untracked, never zero — the coach is told the difference in
+            # the prompt preface so it asks rather than assumes.
+            "nutrition": None
+            if self.nutrition is None
+            else {
+                "daysInWindow": self.nutrition.days_in_window,
+                "daysLogged": self.nutrition.days_logged,
+                "avgCalories": str(self.nutrition.avg_calories),
+                "avgProteinG": str(self.nutrition.avg_protein_g),
+                "avgCarbsG": str(self.nutrition.avg_carbs_g),
+                "avgFatG": str(self.nutrition.avg_fat_g),
+                "avgWaterMl": str(self.nutrition.avg_water_ml),
+            },
             "flags": [f.value for f in self.flags],
         }
 
@@ -229,10 +259,15 @@ class FlagDetector:
             ):
                 flags.append(ContextFlag.WEIGHT_STALLED)
 
-        # Always set while the nutrition domain does not exist, so the coach never
-        # reasons about intake it cannot see.
-        flags.append(ContextFlag.NUTRITION_NOT_TRACKED)
+        # Raised when there is nothing to reason about, and also when logging is too
+        # sparse to average — a single logged day in a week is an anecdote, and treating
+        # it as a weekly intake is how the coach ends up giving advice about a number
+        # the user never claimed.
+        if context.nutrition is None or context.nutrition.days_logged < self.MIN_LOGGED_DAYS:
+            flags.append(ContextFlag.NUTRITION_NOT_TRACKED)
         return flags
+
+    MIN_LOGGED_DAYS = 3
 
     # Tonnage shares are far more skewed than set-count shares — a deadlift day dwarfs a
     # shoulder day in kilos while being comparable in sets — so the fallback threshold is

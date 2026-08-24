@@ -43,6 +43,7 @@ class QuickAddCommand:
     protein_g: Decimal = Decimal(0)
     carbs_g: Decimal = Decimal(0)
     fat_g: Decimal = Decimal(0)
+    alcohol_g: Decimal = Decimal(0)
     label: str = "Quick add"
     local_date: date | None = None
 
@@ -91,6 +92,7 @@ class CreateCustomFoodUseCase:
         protein_per_100g: Decimal,
         carbs_per_100g: Decimal,
         fat_per_100g: Decimal,
+        alcohol_per_100g: Decimal = Decimal(0),
         is_liquid: bool = False,
         servings: list[tuple[str, Decimal]] | None = None,
     ) -> Food:
@@ -102,6 +104,7 @@ class CreateCustomFoodUseCase:
                 protein_per_100g=protein_per_100g,
                 carbs_per_100g=carbs_per_100g,
                 fat_per_100g=fat_per_100g,
+                alcohol_per_100g=alcohol_per_100g,
                 owner_user_id=user_id,
                 is_liquid=is_liquid,
             )
@@ -196,6 +199,7 @@ class LogFoodUseCase:
                     protein_g=command.protein_g,
                     carbs_g=command.carbs_g,
                     fat_g=command.fat_g,
+                    alcohol_g=command.alcohol_g,
                 ),
                 label=command.label,
             )

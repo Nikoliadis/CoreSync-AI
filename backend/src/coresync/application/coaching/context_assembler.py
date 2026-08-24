@@ -18,6 +18,7 @@ from coresync.domain.coaching.context import (
     CoachContext,
     CurrentContext,
     FlagDetector,
+    NutritionWindow,
     ProfileContext,
     RecentPR,
     StalledExercise,
@@ -56,6 +57,7 @@ class ContextAssembler:
         month = await self._window(user_id, today=today, days=_MONTH_DAYS)
         prs, stalled = await self._records(user_id, today=today)
         streak, days_since = await self._streak(user_id, today=today)
+        nutrition = await self._nutrition(user_id, today=today)
 
         context = CoachContext(
             today=today,
@@ -67,11 +69,55 @@ class ContextAssembler:
             stalled_exercises=stalled,
             days_since_last_workout=days_since,
             workout_streak=streak,
+            nutrition=nutrition,
         )
         # Flags are computed from the assembled numbers, never asked of the model.
         return replace(context, flags=self.detector.detect(context))
 
     # ---------------------------------------------------------------- sections
+    async def _nutrition(self, user_id: UUID, *, today: date) -> NutritionWindow | None:
+        """Intake over the last week, or ``None`` if they logged nothing.
+
+        The window is the same seven days as ``training_7d`` so the coach can put the two
+        side by side without reconciling date ranges itself.
+        """
+        date_from = today - timedelta(days=_WEEK_DAYS - 1)
+        entries = await self.uow.diary.entries_for_range(
+            user_id, date_from=date_from, date_to=today
+        )
+        if not entries:
+            return None
+
+        totals: dict[date, Decimal] = {}
+        protein = carbs = fat = _ZERO
+        calories = _ZERO
+        for entry in entries:
+            totals[entry.local_date] = totals.get(entry.local_date, _ZERO) + entry.macros.calories
+            calories += entry.macros.calories
+            protein += entry.macros.protein_g
+            carbs += entry.macros.carbs_g
+            fat += entry.macros.fat_g
+
+        days_logged = len(totals)
+        water = await self.uow.water.logs_for_range(user_id, date_from=date_from, date_to=today)
+        water_total = sum((log.millilitres for log in water), _ZERO)
+
+        def per_day(total: Decimal) -> Decimal:
+            return (total / days_logged).quantize(Decimal("0.1"))
+
+        return NutritionWindow(
+            days_in_window=_WEEK_DAYS,
+            days_logged=days_logged,
+            avg_calories=per_day(calories),
+            avg_protein_g=per_day(protein),
+            avg_carbs_g=per_day(carbs),
+            avg_fat_g=per_day(fat),
+            # Water divides by the same denominator, so a day with food but no water
+            # logged pulls the average down. That is the honest reading: they did log
+            # that day, and they did not drink anything they told us about.
+            avg_water_ml=per_day(water_total),
+        )
+
     async def _profile(self, user_id: UUID, *, today: date) -> ProfileContext:
         profile = await self.uow.profiles.get(user_id)
         goal = await self.uow.goals.get_current(user_id)

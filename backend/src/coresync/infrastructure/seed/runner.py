@@ -1,8 +1,8 @@
-"""Idempotent catalog seeder.
+"""Idempotent reference-data seeder: the exercise catalog and the curated food table.
 
 Run at deploy time, not on application startup — startup seeding races across replicas.
 Every row is upserted on its deterministic id, so running it twice changes nothing and
-running it after adding exercises adds only those.
+running it after adding exercises or foods adds only those.
 
     python -m coresync.infrastructure.seed.runner
 """
@@ -12,12 +12,13 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from coresync.core.config import Settings, get_settings
 from coresync.core.logging import configure_logging, get_logger
+from coresync.domain.nutrition.entities import FoodSource, TrustTier
 from coresync.infrastructure.database.models.catalog import (
     EquipmentModel,
     ExerciseCategoryModel,
@@ -27,8 +28,10 @@ from coresync.infrastructure.database.models.catalog import (
     MuscleGroupModel,
     MuscleModel,
 )
+from coresync.infrastructure.database.models.nutrition import FoodModel, FoodServingModel
 from coresync.infrastructure.database.session import Database
 from coresync.infrastructure.seed.exercises import EXERCISES
+from coresync.infrastructure.seed.foods import GREEK_STAPLES, as_seed
 from coresync.infrastructure.seed.reference import (
     CATEGORIES,
     EQUIPMENT,
@@ -58,6 +61,7 @@ async def seed_catalog(session: AsyncSession) -> dict[str, int]:
         "categories": await _seed_categories(session),
     }
     counts["exercises"] = await _seed_exercises(session)
+    counts["foods"] = await _seed_foods(session)
     await session.commit()
     return counts
 
@@ -245,6 +249,94 @@ async def _seed_exercises(session: AsyncSession) -> int:
 
     await session.flush()
     return len(exercise_rows)
+
+
+async def _seed_foods(session: AsyncSession) -> int:
+    """Curated tier-1 foods and their household servings.
+
+    Ids are derived from the name, so re-running updates the numbers in place rather
+    than creating a second Γιαούρτι. That also means renaming a food in the table
+    creates a new row: intentional, since the diary snapshots what it logged and the
+    old row stays valid for anyone who already ate it.
+    """
+    food_rows: list[dict[str, Any]] = []
+    serving_rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    for raw in GREEK_STAPLES:
+        food = as_seed(raw)
+        if food.name in seen:
+            raise SeedError(f"duplicate food name '{food.name}'")
+        seen.add(food.name)
+
+        food_id = catalog_id("food", food.name)
+        food_rows.append(
+            {
+                "id": food_id,
+                "name": food.name,
+                "brand_id": None,
+                "owner_user_id": None,
+                "source": FoodSource.CURATED.value,
+                "trust_tier": int(TrustTier.CURATED),
+                "calories_per_100g": food.calories,
+                "protein_per_100g": food.protein,
+                "carbs_per_100g": food.carbs,
+                "fat_per_100g": food.fat,
+                "alcohol_per_100g": food.alcohol,
+                "is_verified": True,
+                "is_liquid": food.is_liquid,
+            }
+        )
+        for index, (label, grams) in enumerate(food.servings):
+            serving_rows.append(
+                {
+                    "id": catalog_id("food_serving", f"{food.name}|{label}"),
+                    "food_id": food_id,
+                    "label": label,
+                    "grams": grams,
+                    "is_default": index == 0,
+                }
+            )
+
+    stmt = pg_insert(FoodModel).values(food_rows)
+    await session.execute(
+        stmt.on_conflict_do_update(
+            index_elements=["id"],
+            # `usage_count` is deliberately absent: it is earned by people logging the
+            # food and feeds search ranking. A redeploy must not reset it to zero.
+            set_={
+                c: stmt.excluded[c]
+                for c in food_rows[0]
+                if c not in ("id", "owner_user_id", "brand_id")
+            },
+        )
+    )
+    await session.flush()
+
+    serving_stmt = pg_insert(FoodServingModel).values(serving_rows)
+    await session.execute(
+        serving_stmt.on_conflict_do_update(
+            index_elements=["id"],
+            set_={
+                "label": serving_stmt.excluded.label,
+                "grams": serving_stmt.excluded.grams,
+                "is_default": serving_stmt.excluded.is_default,
+            },
+        )
+    )
+
+    # Drop servings that used to be curated but are no longer in the table. The diary
+    # holds its own gram snapshot and the reference is ON DELETE SET NULL, so an entry
+    # logged against a retired serving keeps its numbers.
+    await session.execute(
+        delete(FoodServingModel).where(
+            FoodServingModel.food_id.in_([row["id"] for row in food_rows]),
+            FoodServingModel.id.notin_([row["id"] for row in serving_rows]),
+        )
+    )
+
+    await session.flush()
+    return len(food_rows)
 
 
 async def catalog_is_seeded(session: AsyncSession) -> bool:

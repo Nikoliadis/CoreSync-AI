@@ -53,6 +53,7 @@ def _food_response(food: Food) -> FoodResponse:
         protein_per_100g=food.protein_per_100g,
         carbs_per_100g=food.carbs_per_100g,
         fat_per_100g=food.fat_per_100g,
+        alcohol_per_100g=food.alcohol_per_100g,
         servings=[
             FoodServingResponse(id=s.id, label=s.label, grams=s.grams, is_default=s.is_default)
             for s in food.servings
@@ -146,6 +147,7 @@ async def create_food(
         protein_per_100g=body.protein_per_100g,
         carbs_per_100g=body.carbs_per_100g,
         fat_per_100g=body.fat_per_100g,
+        alcohol_per_100g=body.alcohol_per_100g,
         is_liquid=body.is_liquid,
         servings=[(s.label, s.grams) for s in body.servings],
     )
@@ -259,6 +261,7 @@ async def quick_add(
             protein_g=body.protein_g,
             carbs_g=body.carbs_g,
             fat_g=body.fat_g,
+            alcohol_g=body.alcohol_g,
             label=body.label,
             local_date=body.local_date,
         )

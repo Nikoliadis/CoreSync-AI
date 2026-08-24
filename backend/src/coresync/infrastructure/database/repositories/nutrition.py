@@ -355,6 +355,29 @@ class SqlAlchemyWaterRepository:
             for m in (await self._session.execute(stmt)).scalars()
         ]
 
+    async def logs_for_range(
+        self, user_id: UUID, *, date_from: date, date_to: date
+    ) -> list[WaterLog]:
+        stmt = (
+            select(WaterLogModel)
+            .where(
+                WaterLogModel.user_id == user_id,
+                WaterLogModel.local_date >= date_from,
+                WaterLogModel.local_date <= date_to,
+            )
+            .order_by(WaterLogModel.local_date, WaterLogModel.logged_at)
+        )
+        return [
+            WaterLog(
+                id=m.id,
+                user_id=m.user_id,
+                local_date=m.local_date,
+                millilitres=m.millilitres,
+                logged_at=m.logged_at,
+            )
+            for m in (await self._session.execute(stmt)).scalars()
+        ]
+
     async def add(self, log: WaterLog) -> None:
         self._session.add(
             WaterLogModel(

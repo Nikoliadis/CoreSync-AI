@@ -1,22 +1,47 @@
-import type { Metadata } from "next";
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
 import { Droplets } from "lucide-react";
+import { useState } from "react";
 
-import { ComingSoon } from "@/components/layout/coming-soon";
+import { PageShell } from "@/components/layout/page-header";
+import { TopBar } from "@/components/layout/topbar";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
+import { nutritionApi, nutritionKeys } from "@/features/nutrition/api";
+import { WaterCard } from "@/features/nutrition/components/water-card";
+import { localToday } from "@/features/nutrition/format";
 
-export const metadata: Metadata = { title: "Water" };
+export default function WaterPage() {
+  // Fixed to today. Back-filling hydration is not a thing anyone does honestly, and the
+  // diary already carries water for any past day worth looking at.
+  const [day] = useState(localToday);
 
-export default function Page() {
+  const water = useQuery({
+    queryKey: nutritionKeys.water(day),
+    queryFn: () => nutritionApi.water(day),
+  });
+
   return (
-    <ComingSoon
-      title="Water"
-      icon={Droplets}
-      summary={"Daily hydration against a goal. Small screen, but it still needs somewhere to store the entries."}
-      blockedBy={"Phase 3 — water intake endpoints."}
-      willDo={[
-        "One-tap logging for your usual glass or bottle size",
-        "A ring against your daily goal",
-        "Streaks that count hydration alongside training",
-      ]}
-    />
+    <>
+      <TopBar title="Water" />
+
+      <PageShell className="max-w-xl">
+        {water.isLoading && <Skeleton className="h-32 w-full" />}
+
+        {water.isError && (
+          <EmptyState
+            icon={<Droplets className="h-8 w-8" />}
+            title="Couldn't load your hydration"
+            action={<Button onClick={() => water.refetch()}>Try again</Button>}
+          />
+        )}
+
+        {water.data && (
+          <WaterCard totalMl={water.data.totalMl} localDate={water.data.localDate} />
+        )}
+      </PageShell>
+    </>
   );
 }
