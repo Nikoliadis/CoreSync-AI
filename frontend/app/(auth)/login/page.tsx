@@ -12,6 +12,7 @@ import { loginSchema, type LoginValues } from "@/features/auth/schemas";
 import { ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SocialSignIn } from "@/features/auth/components/social-sign-in";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -110,6 +111,10 @@ export default function LoginPage() {
           Log in
         </Button>
       </form>
+
+      <div className="mt-4">
+        <SocialSignIn onSuccess={() => router.replace("/dashboard")} />
+      </div>
 
       <p className="mt-6 text-center text-body text-text-secondary">
         New here?{" "}

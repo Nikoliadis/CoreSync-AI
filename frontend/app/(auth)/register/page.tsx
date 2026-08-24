@@ -12,6 +12,7 @@ import { registerSchema, type RegisterValues } from "@/features/auth/schemas";
 import { ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SocialSignIn } from "@/features/auth/components/social-sign-in";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -139,6 +140,12 @@ export default function RegisterPage() {
           Create account
         </Button>
       </form>
+
+      <div className="mt-4">
+        {/* Same component on both pages: with a social provider there is no separate
+            "register" — the first successful sign-in creates the account. */}
+        <SocialSignIn onSuccess={() => router.replace("/dashboard")} />
+      </div>
 
       <p className="mt-6 text-center text-body text-text-secondary">
         Already have an account?{" "}

@@ -12,6 +12,24 @@ export const authApi = {
 
   logout: () => api.post<void>("/v1/auth/logout", {}),
 
+  /**
+   * Exchange a provider ID token for a CoreSync session.
+   *
+   * The client never sees a client *secret* — this is the ID-token flow, so the browser
+   * receives a signed assertion and the backend verifies it against the provider's JWKS.
+   * Nothing here is a credential that could be stolen from the bundle.
+   *
+   * `displayName` exists for Apple, which returns the user's name only on the very first
+   * authorisation and never again. Forwarding it is the one chance to persist it.
+   */
+  oauthSignIn: (
+    provider: "google" | "apple",
+    payload: { idToken: string; nonce?: string; displayName?: string },
+  ) =>
+    api.post<TokenResponse>(`/v1/auth/oauth/${provider}`, payload, {
+      skipAuthRefresh: true,
+    }),
+
   requestPasswordReset: (email: string) =>
     api.post<void>("/v1/auth/request-password-reset", { email }, { skipAuthRefresh: true }),
 
