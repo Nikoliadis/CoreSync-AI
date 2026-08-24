@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 
 import { authApi } from "@/features/auth/api";
+import { AppleMark, GoogleMark } from "@/features/auth/components/provider-marks";
 import {
   APPLE_SERVICE_ID,
   GOOGLE_CLIENT_ID,
+  clickGoogleButton,
   isConfigured,
   renderGoogleButton,
   signInWithApple,
@@ -105,13 +107,27 @@ export function SocialSignIn({ onSuccess, dividerLabel = "or" }: Props) {
           make something unusable on a phone. */}
       <div className="flex items-center justify-center gap-3">
         {hasGoogle && (
-          // Google's own rendered mark, not a hand-drawn one: their branding terms
-          // require it, and it is also what gets FedCM and One Tap. Their icon button
-          // renders at 40px, so the wrapper squares it up to 44.
-          <div
-            ref={googleSlot}
-            className="h-11 w-11 overflow-hidden rounded-md [&_div[role=button]]:!h-11 [&_div[role=button]]:!w-11 [&_div[role=button]]:!rounded-md [&_iframe]:!h-11 [&_iframe]:!w-11"
-          />
+          <>
+            {/* Google's real button, kept in the tree and visually hidden. It is the
+                only supported source of an ID token from a click, so it has to exist —
+                the visible button below forwards to it. `sr-only` rather than
+                `display:none`, because a hidden element cannot be clicked. */}
+            <div ref={googleSlot} className="sr-only" aria-hidden />
+
+            <button
+              type="button"
+              disabled={busy}
+              aria-label="Continue with Google"
+              onClick={() => {
+                if (!clickGoogleButton(googleSlot.current)) {
+                  setError("Google sign-in is unavailable right now.");
+                }
+              }}
+              className="flex h-11 w-11 items-center justify-center rounded-md border border-border bg-surface-raised transition-colors hover:bg-surface-well disabled:opacity-50"
+            >
+              <GoogleMark />
+            </button>
+          </>
         )}
 
         {hasApple && (
@@ -136,14 +152,6 @@ export function SocialSignIn({ onSuccess, dividerLabel = "or" }: Props) {
         )}
       </div>
     </div>
-  );
-}
-
-function AppleMark() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" aria-hidden focusable="false">
-      <path d="M16.365 1.43c0 1.14-.42 2.2-1.25 3.02-.99.99-2.1 1.56-3.3 1.47a3.3 3.3 0 0 1-.03-.6c0-1.1.5-2.27 1.31-3.07.8-.8 2.06-1.4 3.13-1.45.03.21.14.42.14.63ZM20.9 17.1c-.55 1.27-.82 1.84-1.53 2.96-.99 1.57-2.39 3.53-4.12 3.54-1.54.02-1.94-1-4.03-.99-2.09.01-2.53 1.01-4.07.99-1.73-.01-3.05-1.78-4.04-3.35C.35 15.85-.02 10.7 2.1 8c1.03-1.35 2.65-2.14 4.18-2.14 1.56 0 2.54 1 3.83 1 1.25 0 2.01-1 3.81-1 1.36 0 2.8.74 3.83 2.02-3.37 1.85-2.82 6.66.15 8.22Z" />
-    </svg>
   );
 }
 

@@ -114,10 +114,16 @@ declare global {
 }
 
 /**
- * Renders Google's own button into `parent` and resolves when the user signs in.
+ * Renders Google's button into `parent` and resolves when the user signs in.
  *
- * Google's rendered button rather than a custom one: their branding terms require it,
- * and it is also the only variant that gets FedCM and One Tap behaviour for free.
+ * `renderButton` is the only supported way to obtain an ID token from a user gesture in
+ * the browser — One Tap is the alternative and it can be permanently dismissed. So the
+ * real button is always rendered; a caller wanting its own styling hides this container
+ * and forwards clicks to it via `clickGoogleButton`.
+ *
+ * That proxy is the honest cost of a custom mark: it reaches into Google's rendered DOM,
+ * so a change on their side could break it. `clickGoogleButton` reports failure rather
+ * than doing nothing, which is what makes that a visible error instead of a dead button.
  */
 export async function renderGoogleButton(
   parent: HTMLElement,
@@ -145,10 +151,6 @@ export async function renderGoogleButton(
       },
     });
 
-    // `type: "icon"` is an officially supported variant, so a mark-only button stays
-    // inside Google's branding terms — which a hand-drawn G would not. It also sidesteps
-    // the localisation mismatch entirely: there is no text left to render in the wrong
-    // language.
     google.accounts.id.renderButton(parent, {
       type: "icon",
       theme: options.theme,
@@ -199,4 +201,19 @@ export async function signInWithApple(): Promise<OAuthResult> {
     nonce,
     displayName: displayName || undefined,
   };
+}
+
+
+/**
+ * Click Google's rendered button on behalf of a custom one.
+ *
+ * Returns false when the target cannot be found, so the caller can say something rather
+ * than presenting a button that silently does nothing. This is the fragile part of the
+ * custom-mark approach and it is deliberately loud about failing.
+ */
+export function clickGoogleButton(container: HTMLElement | null): boolean {
+  const target = container?.querySelector<HTMLElement>('div[role="button"]');
+  if (!target) return false;
+  target.click();
+  return true;
 }
