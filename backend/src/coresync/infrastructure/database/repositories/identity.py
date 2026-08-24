@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from coresync.domain.identity.entities import (
@@ -16,6 +16,7 @@ from coresync.domain.identity.entities import (
     TokenPurpose,
     User,
     UserDevice,
+    UserStatus,
 )
 from coresync.infrastructure.database.mappers import (
     AuthIdentityMapper,
@@ -32,8 +33,144 @@ from coresync.infrastructure.database.models.identity import (
     UserModel,
 )
 
+# Not a hash of anything. Argon2 hashes start with `$argon2`, so a value that cannot
+# parse as one can never verify against any password — which is the point. Named as a
+# constant so the bandit rule can be silenced once, at the definition, with the reason.
+ERASED_PASSWORD_HASH = "!erased"  # noqa: S105 — deliberately unparseable, never a secret
 
-class SqlAlchemyUserRepository:
+# Tables holding data personal to one user, cleared on erasure. Ordered so children go
+# before parents where a foreign key would otherwise refuse.
+#
+# What is deliberately *absent* is as important as what is here: `daily_activity_summaries`,
+# `daily_nutrition_summaries`, `user_streaks` and `user_achievements` are derived counts
+# with nothing personal in them once the identity is scrubbed, and keeping them is what
+# stops platform statistics rewriting themselves every time somebody leaves.
+_PERSONAL_TABLES: tuple[str, ...] = (
+    # AI: transcripts are the most sensitive thing in the system.
+    "ai_tool_calls",
+    "ai_messages",
+    "ai_conversations",
+    "ai_insights",
+    "ai_usage_logs",
+    # Body data.
+    "progress_photos",
+    "body_measurements",
+    "weight_logs",
+    "user_goals",
+    # Nutrition.
+    "diary_entries",
+    "water_logs",
+    "recipe_ingredients",
+    "recipes",
+    "nutrition_targets",
+    "favorite_foods",
+    # Training.
+    "session_sets",
+    "session_exercises",
+    "workout_sessions",
+    "routine_sets",
+    "routine_exercises",
+    "routines",
+    "personal_records",
+    "exercise_statistics",
+    "user_favorite_exercises",
+    # Identity and delivery.
+    "notification_outbox",
+    "notifications",
+    "notification_preferences",
+    "user_devices",
+    "sync_operations",
+    "single_use_tokens",
+    "refresh_tokens",
+    "auth_identities",
+    "user_settings",
+    "user_profiles",
+)
+
+# Child tables keyed by their parent rather than by user_id directly.
+_CHILD_TABLES: dict[str, str] = {
+    "ai_tool_calls": (
+        "message_id IN (SELECT m.id FROM ai_messages m "
+        "JOIN ai_conversations c ON c.id = m.conversation_id WHERE c.user_id = :uid)"
+    ),
+    "ai_messages": "conversation_id IN (SELECT id FROM ai_conversations WHERE user_id = :uid)",
+    "recipe_ingredients": "recipe_id IN (SELECT id FROM recipes WHERE user_id = :uid)",
+    "session_sets": (
+        "session_exercise_id IN (SELECT se.id FROM session_exercises se "
+        "JOIN workout_sessions s ON s.id = se.session_id WHERE s.user_id = :uid)"
+    ),
+    "session_exercises": "session_id IN (SELECT id FROM workout_sessions WHERE user_id = :uid)",
+    "routine_sets": (
+        "routine_exercise_id IN (SELECT re.id FROM routine_exercises re "
+        "JOIN routines r ON r.id = re.routine_id WHERE r.user_id = :uid)"
+    ),
+    "routine_exercises": "routine_id IN (SELECT id FROM routines WHERE user_id = :uid)",
+    "notification_outbox": "notification_id IN (SELECT id FROM notifications WHERE user_id = :uid)",
+}
+
+
+class _ErasureMixin:
+    """Erasure, split out so the size of the table list does not bury the repository."""
+
+    _session: AsyncSession
+
+    async def list_due_for_erasure(self, *, cutoff: datetime, limit: int) -> list[UUID]:
+        stmt = (
+            select(UserModel.id)
+            .where(
+                UserModel.deleted_at.is_not(None),
+                UserModel.deleted_at <= cutoff,
+                # Already erased accounts must never be picked up again — that is what
+                # makes the sweep free to re-run after a failure.
+                UserModel.status != UserStatus.ERASED.value,
+            )
+            .order_by(UserModel.deleted_at)
+            .limit(limit)
+        )
+        return list((await self._session.execute(stmt)).scalars())
+
+    async def erase(self, user_id: UUID, *, at: datetime) -> None:
+        current = (
+            await self._session.execute(select(UserModel.status).where(UserModel.id == user_id))
+        ).scalar_one_or_none()
+        if current is None or current == UserStatus.ERASED.value:
+            return
+
+        for table in _PERSONAL_TABLES:
+            predicate = _CHILD_TABLES.get(table, "user_id = :uid")
+
+            # from a caller. The only value that varies is bound, not interpolated.
+            await self._session.execute(
+                text(f"DELETE FROM {table} WHERE {predicate}"),  # noqa: S608
+                {"uid": user_id},
+            )
+
+        # The row survives, its identity does not. A unique, syntactically valid address
+        # in a reserved TLD, so the uniqueness constraint holds and nothing can ever
+        # deliver to it.
+        await self._session.execute(
+            update(UserModel)
+            .where(UserModel.id == user_id)
+            .values(
+                email=f"erased-{user_id}@invalid",
+                password_hash=ERASED_PASSWORD_HASH,
+                status=UserStatus.ERASED.value,
+                deleted_at=at,
+                # Clearing the verification timestamp along with the address: a
+                # verified-at date that refers to an address nobody can name any more
+                # is a fact about a person we just erased.
+                email_verified_at=None,
+                # Login bookkeeping is behavioural data about a real person, so it goes
+                # with the rest of it.
+                last_login_at=None,
+                failed_login_count=0,
+                locked_until=None,
+            )
+        )
+        await self._session.flush()
+
+
+class SqlAlchemyUserRepository(_ErasureMixin):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 

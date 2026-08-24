@@ -24,7 +24,11 @@ class UserStatus(StrEnum):
     PENDING = "pending"
     ACTIVE = "active"
     SUSPENDED = "suspended"
+    # Soft-deleted, still inside the grace period, still recoverable by the user.
     DELETED = "deleted"
+    # Erasure has run. The row is an anonymous shell kept so derived aggregates stay
+    # meaningful; it is never recoverable and never counted as a user.
+    ERASED = "erased"
 
 
 class AuthProvider(StrEnum):
@@ -126,6 +130,10 @@ class User:
         """Soft-delete with a grace period. Hard erasure is a separate, later job."""
         self.deleted_at = now
         self.status = UserStatus.DELETED
+
+    @property
+    def is_erased(self) -> bool:
+        return self.status is UserStatus.ERASED
 
     def cancel_deletion(self) -> None:
         self.deleted_at = None

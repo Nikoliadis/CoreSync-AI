@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "CoreSync",
+    "slug": "coresync",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "coresync",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0b"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "ai.coresync.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Scan barcodes to log packaged foods.",
+        "NSPhotoLibraryUsageDescription": "Attach progress photos to your history."
+      }
+    },
+    "android": {
+      "package": "ai.coresync.app",
+      "adaptiveIcon": { "backgroundColor": "#0a0a0b" },
+      "permissions": ["CAMERA"]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-localization",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0a0a0b",
+          "dark": { "backgroundColor": "#0a0a0b" }
+        }
+      ]
+    ],
+    "experiments": { "typedRoutes": true }
+  }
+}

@@ -62,18 +62,25 @@ services:
     command: uvicorn coresync.presentation.main:app --host 0.0.0.0 --port 8000 --reload
     ports: ["8000:8000"]
 
+  # Both of these pointed at `coresync.infrastructure.tasks`, a module that was never
+  # written — so the services existed in compose and failed on startup, which is why
+  # nothing has ever drained the notification outbox. The single default queue is
+  # deliberate: routing to `ai` and `media` before there is work to route is three
+  # queues to monitor and two of them empty.
   worker:
     <<: *api-base
-    command: celery -A coresync.infrastructure.tasks.celery_app worker -l info -Q default,ai,media
+    command: celery -A coresync.infrastructure.worker.app worker -l info
     healthcheck:
-      test: ["CMD-SHELL", "celery -A coresync.infrastructure.tasks.celery_app inspect ping -d celery@$$HOSTNAME"]
+      test: ["CMD-SHELL", "celery -A coresync.infrastructure.worker.app inspect ping -d celery@$$HOSTNAME"]
       interval: 30s
       timeout: 10s
       retries: 3
 
   beat:
     <<: *api-base
-    command: celery -A coresync.infrastructure.tasks.celery_app beat -l info
+    # Exactly one beat process, ever. Two schedulers against one broker means every
+    # scheduled task fires twice.
+    command: celery -A coresync.infrastructure.worker.app beat -l info
 
   # Stands in for Azure Blob Storage locally; the storage port has an S3-compatible adapter
   # so the same application code runs against both.

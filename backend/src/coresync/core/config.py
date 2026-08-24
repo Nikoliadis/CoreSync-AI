@@ -48,6 +48,23 @@ class Settings(BaseSettings):
     # ---------------------------------------------------------------- cache
     redis_url: RedisDsn = Field(default="redis://localhost:6379/0")  # type: ignore[assignment]
 
+    # Celery rides on the Redis that is already here. A second broker would be a second
+    # thing to run, monitor and lose messages in, for work that is neither high volume
+    # nor long running. Separate logical databases so a `FLUSHDB` on the cache cannot
+    # take the queue with it.
+    celery_broker_url: str = Field(default="")
+    celery_result_backend: str = Field(default="")
+
+    # How often the outbox is drained. Every notification this product sends is a
+    # reminder or a nudge, so a minute of latency is invisible; polling harder would
+    # just be load with nothing to show for it.
+    outbox_dispatch_seconds: int = Field(default=60, ge=5, le=3600)
+
+    # Accounts past their grace period are erased on this cadence. Daily rather than
+    # hourly: the deadline is a date, and running more often only shortens the window
+    # in which a user can still change their mind.
+    erasure_sweep_hour_utc: int = Field(default=3, ge=0, le=23)
+
     # ---------------------------------------------------------------- auth
     jwt_secret_key: str = "development-secret-not-for-production-use-only"  # noqa: S105
     jwt_algorithm: Literal["HS256", "RS256"] = "HS256"
@@ -129,6 +146,26 @@ class Settings(BaseSettings):
         503 from the AI endpoints while the rest of the API works normally.
         """
         return bool(self.azure_openai_endpoint and self.azure_openai_api_key)
+
+    @property
+    def broker_url(self) -> str:
+        """The Celery broker, defaulting to database 1 of the configured Redis.
+
+        Explicit configuration wins; the fallback exists so a developer who set only
+        `REDIS_URL` gets a working worker instead of a connection error.
+        """
+        return self.celery_broker_url or self._redis_db(1)
+
+    @property
+    def result_backend(self) -> str:
+        return self.celery_result_backend or self._redis_db(2)
+
+    def _redis_db(self, index: int) -> str:
+        base = str(self.redis_url).rstrip("/")
+        # RedisDsn always carries a path; swap the database rather than appending, or
+        # `redis://host:6379/0` becomes `redis://host:6379/0/1`.
+        head, _, tail = base.rpartition("/")
+        return f"{head}/{index}" if tail.isdigit() else f"{base}/{index}"
 
     @property
     def sync_database_url(self) -> str:

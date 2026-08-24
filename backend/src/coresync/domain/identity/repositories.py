@@ -33,6 +33,22 @@ class UserRepository(Protocol):
 
     async def update(self, user: User) -> None: ...
 
+    async def list_due_for_erasure(self, *, cutoff: datetime, limit: int) -> list[UUID]:
+        """Accounts soft-deleted before ``cutoff`` and not yet erased.
+
+        The cutoff is the user's protection and this query is the only thing enforcing
+        it, so it belongs in the predicate rather than in a filter afterwards.
+        """
+        ...
+
+    async def erase(self, user_id: UUID, *, at: datetime) -> None:
+        """Strip personal data, keep the anonymised row and derived aggregates.
+
+        Idempotent: an account already erased is left alone, so a job that fails midway
+        is safe to run again.
+        """
+        ...
+
 
 class AuthIdentityRepository(Protocol):
     async def get_by_provider_subject(
