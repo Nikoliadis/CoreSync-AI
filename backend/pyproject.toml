@@ -78,16 +78,31 @@ ignore = [
     "B008",        # function call in default arg — this is how FastAPI Depends works
 ]
 
+# Greek letters are not typos here. This is a Greek-market product: food names, test
+# fixtures and the comments explaining them are all legitimately Greek, and RUF001/2/3
+# flag every one of them as a possible Latin lookalike.
+#
+# Listed as allowed confusables rather than switching the rules off, because the rules
+# also catch the confusable that *is* always a mistake — an en-dash or a non-breaking
+# space that a word processor slipped into source. That check is worth keeping.
+allowed-confusables = [
+    "α", "β", "γ", "δ", "ε", "ζ", "η", "θ", "ι", "κ", "λ", "μ",
+    "ν", "ξ", "ο", "π", "ρ", "ς", "σ", "τ", "υ", "φ", "χ", "ψ", "ω",
+    "Α", "Β", "Γ", "Δ", "Ε", "Ζ", "Η", "Θ", "Ι", "Κ", "Λ", "Μ",
+    "Ν", "Ξ", "Ο", "Π", "Ρ", "Σ", "Τ", "Υ", "Φ", "Χ", "Ψ", "Ω",
+    "ά", "έ", "ή", "ί", "ό", "ύ", "ώ", "ϊ", "ϋ", "ΐ", "ΰ",
+    "Ά", "Έ", "Ή", "Ί", "Ό", "Ύ", "Ώ",
+]
+
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S105", "S106", "S311"]          # hardcoded test credentials are fine
 "migrations/*" = ["E501", "N999"]
 # The catalog is a data table, one exercise per line. Wrapping the rows would make the
 # library unreadable in a diff, which is the whole point of the tabular form.
 "src/coresync/infrastructure/seed/exercises.py" = ["E501"]
-# Greek food names, deliberately. RUF001 reads γ as a possible typo for y — a useful
-# rule in code, a false positive in a Greek data table. Scoped to this one file so the
-# check keeps working everywhere else; it caught real en-dash confusables elsewhere.
-"src/coresync/infrastructure/seed/foods.py" = ["E501", "RUF001"]
+# A data table, one food per line, same reasoning as the exercise catalog above.
+# Greek characters no longer need an ignore here — see `allowed-confusables`.
+"src/coresync/infrastructure/seed/foods.py" = ["E501"]
 # `PgUUID` is the conventional alias for postgresql.UUID and reads better than the
 # alternative of shadowing the stdlib name.
 "src/coresync/infrastructure/database/models/*" = ["N811"]

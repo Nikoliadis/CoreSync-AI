@@ -185,6 +185,19 @@ async def clean_database(api_settings: Settings, seeded_catalog: None) -> AsyncI
         from sqlalchemy import text
 
         await session.execute(text("DELETE FROM users"))
+        # Foods cached from a barcode scan are *public* rows — no owner — so they
+        # outlive the user who scanned them, which is exactly the intent: the catalogue
+        # grows for everybody. That also means they survive the delete above, so a test
+        # that scans a product would leave it behind for the next one. Only OFF-sourced
+        # rows are removed; the curated seed is `source = 'curated'` and stays.
+        await session.execute(text("DELETE FROM foods WHERE source = 'off'"))
+        # A food approved through the moderation queue is promoted to public — its owner
+        # is set to NULL, which is exactly what makes it visible to everyone and exactly
+        # what makes it survive the delete above. The curated seed is `source =
+        # 'curated'`, so matching on 'user' removes only what a test promoted.
+        await session.execute(
+            text("DELETE FROM foods WHERE source = 'user' AND owner_user_id IS NULL")
+        )
         await session.commit()
     await engine.dispose()
 

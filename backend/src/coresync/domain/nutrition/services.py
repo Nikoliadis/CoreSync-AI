@@ -7,9 +7,12 @@ decisions about.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
+from itertools import pairwise
 
 from coresync.domain.nutrition.entities import (
     DiaryEntry,
@@ -166,3 +169,52 @@ def search_rank(food: Food, *, query: str, is_owner: bool) -> tuple[int, int, in
     tier = 0 if is_owner and food.is_custom else int(food.trust_tier)
 
     return (exactness, tier, -food.usage_count)
+
+
+@dataclass(frozen=True, slots=True)
+class NutritionStreak:
+    """Consecutive days with something logged, ending at the most recent logged day."""
+
+    current: int
+    longest: int
+    last_date: date | None
+
+
+def nutrition_streak(logged_days: Sequence[date], *, today: date) -> NutritionStreak:
+    """Streak over the days a diary entry exists, not over calories.
+
+    A day counts if anything was logged on it. Requiring a calorie threshold would mean
+    a genuine fasting day, or a day of nothing but black coffee, silently breaks a
+    streak the person believes they kept — and a streak that punishes honest logging
+    teaches people to stop logging honestly.
+
+    Today not being logged *yet* does not break the run: the day is still in progress.
+    Yesterday not being logged does.
+    """
+    if not logged_days:
+        return NutritionStreak(current=0, longest=0, last_date=None)
+
+    days = sorted(set(logged_days))
+
+    longest = 1
+    run = 1
+    for previous, current_day in pairwise(days):
+        if (current_day - previous).days == 1:
+            run += 1
+        else:
+            run = 1
+        longest = max(longest, run)
+
+    last = days[-1]
+    gap = (today - last).days
+    # A gap of 0 is "logged today", 1 is "logged yesterday and today is not over".
+    if gap > 1:
+        return NutritionStreak(current=0, longest=longest, last_date=last)
+
+    current = 1
+    for current_day, previous in pairwise(reversed(days)):
+        if (current_day - previous).days != 1:
+            break
+        current += 1
+
+    return NutritionStreak(current=current, longest=max(longest, current), last_date=last)

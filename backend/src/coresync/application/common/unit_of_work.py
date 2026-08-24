@@ -38,6 +38,8 @@ from coresync.domain.notifications.repositories import (
 from coresync.domain.nutrition.repositories import (
     DiaryRepository,
     FoodRepository,
+    FoodSubmissionRepository,
+    NutritionSummaryRepository,
     RecipeRepository,
     WaterRepository,
 )
@@ -99,6 +101,8 @@ class UnitOfWork(Protocol):
     diary: DiaryRepository
     water: WaterRepository
     recipes: RecipeRepository
+    nutrition_summaries: NutritionSummaryRepository
+    food_submissions: FoodSubmissionRepository
 
     async def __aenter__(self) -> UnitOfWork: ...
 

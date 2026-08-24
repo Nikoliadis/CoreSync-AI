@@ -7,7 +7,7 @@ method offers the unscoped shape (docs/05 §3).
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -759,6 +759,29 @@ class SqlAlchemyStreakRepository:
         self._session = session
         # The streak rules live in the domain; this repository only persists the result.
         self._calculator = StreakCalculator()
+
+    async def set_nutrition(
+        self, user_id: UUID, *, current: int, longest: int, last_date: date | None
+    ) -> None:
+        await self._session.execute(
+            pg_insert(UserStreakModel)
+            .values(
+                user_id=user_id,
+                nutrition_current=current,
+                nutrition_longest=longest,
+                nutrition_last_date=last_date,
+            )
+            .on_conflict_do_update(
+                index_elements=["user_id"],
+                set_={
+                    "nutrition_current": current,
+                    "nutrition_longest": longest,
+                    "nutrition_last_date": last_date,
+                    "updated_at": datetime.now(tz=UTC),
+                },
+            )
+        )
+        await self._session.flush()
 
     async def get(self, user_id: UUID) -> Streak | None:
         model = await self._session.get(UserStreakModel, user_id)

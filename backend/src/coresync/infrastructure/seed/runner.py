@@ -28,10 +28,15 @@ from coresync.infrastructure.database.models.catalog import (
     MuscleGroupModel,
     MuscleModel,
 )
-from coresync.infrastructure.database.models.nutrition import FoodModel, FoodServingModel
+from coresync.infrastructure.database.models.nutrition import (
+    FoodModel,
+    FoodServingModel,
+    NutrientModel,
+)
 from coresync.infrastructure.database.session import Database
 from coresync.infrastructure.seed.exercises import EXERCISES
 from coresync.infrastructure.seed.foods import GREEK_STAPLES, as_seed
+from coresync.infrastructure.seed.nutrients import NUTRIENTS, nutrient_id
 from coresync.infrastructure.seed.reference import (
     CATEGORIES,
     EQUIPMENT,
@@ -61,6 +66,8 @@ async def seed_catalog(session: AsyncSession) -> dict[str, int]:
         "categories": await _seed_categories(session),
     }
     counts["exercises"] = await _seed_exercises(session)
+    # Before foods: an imported product's nutrient rows reference these by id.
+    counts["nutrients"] = await _seed_nutrients(session)
     counts["foods"] = await _seed_foods(session)
     await session.commit()
     return counts
@@ -249,6 +256,25 @@ async def _seed_exercises(session: AsyncSession) -> int:
 
     await session.flush()
     return len(exercise_rows)
+
+
+async def _seed_nutrients(session: AsyncSession) -> int:
+    """The reference list the food detail screen and every importer key off."""
+    return await _upsert(
+        session,
+        NutrientModel,
+        [
+            {
+                "id": nutrient_id(code),
+                "code": code,
+                "name": name,
+                "unit": unit,
+                "category": category,
+            }
+            for code, name, unit, category in NUTRIENTS
+        ],
+        "code",
+    )
 
 
 async def _seed_foods(session: AsyncSession) -> int:

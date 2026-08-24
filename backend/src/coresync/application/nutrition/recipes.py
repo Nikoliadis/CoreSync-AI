@@ -14,6 +14,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from coresync.application.common.unit_of_work import UnitOfWork
+from coresync.application.nutrition.summaries import refresh_day
 from coresync.core.clock import Clock, local_date_for
 from coresync.core.errors import NotFoundError, ValidationError
 from coresync.core.ids import uuid7
@@ -240,6 +241,7 @@ class LogRecipeUseCase(_RecipeResolver):
                 raise ValidationError(str(exc)) from exc
 
             await self._uow.diary.add(entry)
+            await refresh_day(self._uow, command.user_id, on)
             await self._uow.commit()
 
         return entry

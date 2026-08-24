@@ -18,7 +18,9 @@ from tests.fakes import CapturingEmailSender
 
 pytestmark = pytest.mark.asyncio
 
-ADMIN_ROUTES = ("/v1/admin/stats", "/v1/admin/users")
+# Every GET on the admin router. New routes belong here: the guard is applied at the
+# router level precisely so it cannot be forgotten, and this list is what proves it.
+ADMIN_ROUTES = ("/v1/admin/stats", "/v1/admin/users", "/v1/admin/food-submissions")
 
 
 async def _register(

@@ -1,7 +1,14 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Plus, Trash2, UtensilsCrossed } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  CopyPlus,
+  Plus,
+  Trash2,
+  UtensilsCrossed,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -20,6 +27,8 @@ import {
   nutritionApi,
   nutritionKeys,
 } from "@/features/nutrition/api";
+import { CopyDayDialog } from "@/features/nutrition/components/copy-day-dialog";
+import { EditEntryDialog } from "@/features/nutrition/components/edit-entry-dialog";
 import { FoodSearchDialog } from "@/features/nutrition/components/food-search-dialog";
 import { WaterCard } from "@/features/nutrition/components/water-card";
 import { friendlyDate, kcal, localToday, macroSlots, portion, shiftDate } from "@/features/nutrition/format";
@@ -28,6 +37,8 @@ export default function NutritionPage() {
   const queryClient = useQueryClient();
   const [day, setDay] = useState(localToday);
   const [adding, setAdding] = useState<MealType | null>(null);
+  const [editing, setEditing] = useState<DiaryEntry | null>(null);
+  const [copying, setCopying] = useState(false);
 
   const diary = useQuery({
     queryKey: nutritionKeys.diary(day),
@@ -52,7 +63,15 @@ export default function NutritionPage() {
 
   return (
     <>
-      <TopBar title="Nutrition" />
+      <TopBar
+        title="Nutrition"
+        action={
+          <Button size="sm" variant="ghost" onClick={() => setCopying(true)}>
+            <CopyPlus className="h-4 w-4" aria-hidden />
+            Copy a day
+          </Button>
+        }
+      />
 
       <PageShell className="max-w-3xl">
         <DayStepper day={day} onChange={setDay} />
@@ -153,7 +172,12 @@ export default function NutritionPage() {
                           key={entry.id}
                           className="flex items-center justify-between gap-3 border-t border-border py-2 first:border-t-0"
                         >
-                          <div className="min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => setEditing(entry)}
+                            className="min-w-0 flex-1 rounded-md text-left transition-colors hover:bg-surface-well"
+                            aria-label={`Edit ${entry.displayName}`}
+                          >
                             <p className="truncate text-body text-text">
                               {entry.displayName}
                             </p>
@@ -174,7 +198,7 @@ export default function NutritionPage() {
                                 {Math.round(Number(entry.macros.fatG))}
                               </span>
                             </p>
-                          </div>
+                          </button>
                           <div className="flex shrink-0 items-center gap-1">
                             <span className="tabular text-body text-text">
                               {kcal(entry.macros.calories)}
@@ -198,6 +222,12 @@ export default function NutritionPage() {
           </div>
         )}
       </PageShell>
+
+      {editing && (
+        <EditEntryDialog entry={editing} onClose={() => setEditing(null)} />
+      )}
+
+      {copying && <CopyDayDialog targetDate={day} onClose={() => setCopying(false)} />}
 
       {adding && (
         <FoodSearchDialog

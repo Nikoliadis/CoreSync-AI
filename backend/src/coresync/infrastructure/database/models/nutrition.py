@@ -316,3 +316,49 @@ class FavoriteFoodModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()"), nullable=False
     )
+
+
+class FoodSubmissionModel(Base):
+    """A request to promote a private food into the shared catalogue.
+
+    No soft delete: a submission is terminal once reviewed, and a rejected one is
+    evidence of what was asked and answered. A food is resubmitted, never un-rejected.
+    """
+
+    __tablename__ = "food_submissions"
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True)
+    food_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("foods.id", ondelete="CASCADE"), nullable=False
+    )
+    # Nullable: the submitter can delete their account while the item is still queued,
+    # and the review still needs to happen.
+    submitted_by: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="pending")
+    note: Mapped[str | None] = mapped_column(Text)
+    reviewed_by: Mapped[UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()"), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','approved','rejected')", name="submission_status_valid"
+        ),
+        CheckConstraint(
+            "(status = 'pending') = (reviewed_at IS NULL)",
+            name="submission_review_consistent",
+        ),
+        Index(
+            "uq_food_submissions_pending",
+            "food_id",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+        ),
+        Index("ix_food_submissions_queue", "status", text("created_at ASC")),
+    )

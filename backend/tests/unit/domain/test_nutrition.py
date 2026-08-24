@@ -7,7 +7,7 @@ reconciliation and the search ranking are all pinned directly. Food data quality
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -27,8 +27,10 @@ from coresync.domain.nutrition.entities import (
 )
 from coresync.domain.nutrition.services import (
     EnergyVerdict,
+    NutritionStreak,
     check_energy,
     macro_split,
+    nutrition_streak,
     search_rank,
     summarise_day,
 )
@@ -380,9 +382,7 @@ class TestLoggingARecipe:
     """
 
     def _recipe(self, chicken: Food, *, servings: int = 2, grams: int = 400) -> Recipe:
-        recipe = Recipe.create(
-            user_id=USER, name="Batch cook", servings_count=Decimal(servings)
-        )
+        recipe = Recipe.create(user_id=USER, name="Batch cook", servings_count=Decimal(servings))
         recipe.ingredients = [ingredient(recipe.id, chicken.id, grams)]
         return recipe
 
@@ -613,3 +613,74 @@ class TestCuratedSeed:
 
         for raw in GREEK_STAPLES:
             assert as_seed(raw).servings, as_seed(raw).name
+
+
+class TestNutritionStreak:
+    """Consecutive logged days.
+
+    Counted over days that have an entry, never over calories: a genuine fasting day, or
+    a day of nothing but black coffee, must not break a run the person believes they
+    kept. A streak that punishes honest logging teaches people to log dishonestly.
+    """
+
+    def _days(self, *offsets: int, anchor: date = date(2026, 8, 24)) -> list[date]:
+        return [anchor - timedelta(days=n) for n in offsets]
+
+    def test_no_days_logged(self) -> None:
+        result = nutrition_streak([], today=date(2026, 8, 24))
+        assert result == NutritionStreak(current=0, longest=0, last_date=None)
+
+    def test_a_single_day_today(self) -> None:
+        result = nutrition_streak(self._days(0), today=date(2026, 8, 24))
+        assert result.current == 1
+        assert result.longest == 1
+
+    def test_consecutive_days_ending_today(self) -> None:
+        result = nutrition_streak(self._days(0, 1, 2, 3), today=date(2026, 8, 24))
+        assert result.current == 4
+        assert result.longest == 4
+
+    def test_today_not_logged_yet_does_not_break_it(self) -> None:
+        """The day is still in progress. Breaking the streak at 00:01 would be absurd."""
+        result = nutrition_streak(self._days(1, 2, 3), today=date(2026, 8, 24))
+        assert result.current == 3
+
+    def test_a_missed_yesterday_breaks_it(self) -> None:
+        result = nutrition_streak(self._days(2, 3, 4), today=date(2026, 8, 24))
+        assert result.current == 0
+        assert result.longest == 3
+
+    def test_the_longest_run_survives_a_break(self) -> None:
+        """A broken streak is still a record worth keeping."""
+        older = self._days(10, 11, 12, 13, 14)
+        recent = self._days(0, 1)
+        result = nutrition_streak(older + recent, today=date(2026, 8, 24))
+        assert result.current == 2
+        assert result.longest == 5
+
+    def test_duplicate_days_count_once(self) -> None:
+        """Three meals on one day is one logged day."""
+        anchor = date(2026, 8, 24)
+        result = nutrition_streak([anchor, anchor, anchor], today=anchor)
+        assert result.current == 1
+
+    def test_days_arrive_in_any_order(self) -> None:
+        result = nutrition_streak(self._days(2, 0, 3, 1), today=date(2026, 8, 24))
+        assert result.current == 4
+
+    def test_the_last_date_is_the_most_recent_logged_day(self) -> None:
+        result = nutrition_streak(self._days(1, 2), today=date(2026, 8, 24))
+        assert result.last_date == date(2026, 8, 23)
+
+    def test_a_long_abandoned_streak_reports_zero_current(self) -> None:
+        result = nutrition_streak(self._days(90, 91, 92), today=date(2026, 8, 24))
+        assert result.current == 0
+        assert result.longest == 3
+        assert result.last_date == date(2026, 8, 24) - timedelta(days=90)
+
+    def test_a_streak_across_a_month_boundary(self) -> None:
+        result = nutrition_streak(
+            [date(2026, 8, 1), date(2026, 7, 31), date(2026, 7, 30)],
+            today=date(2026, 8, 1),
+        )
+        assert result.current == 3

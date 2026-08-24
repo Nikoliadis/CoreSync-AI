@@ -418,3 +418,55 @@ class TestRecentFoods:
 
         response = await client.get("/v1/nutrition/foods/recent", headers=other_headers)
         assert response.json()["items"] == []
+
+
+class TestFoodDetail:
+    async def test_a_curated_food_has_a_detail_view(
+        self, client: AsyncClient, headers: dict
+    ) -> None:
+        feta = await food_named(client, headers, "Φέτα")
+        response = await client.get(f"/v1/nutrition/foods/{feta['id']}", headers=headers)
+        assert response.status_code == 200, response.text
+        assert response.json()["food"]["name"] == "Φέτα"
+
+    async def test_the_detail_route_does_not_swallow_recent(
+        self, client: AsyncClient, headers: dict
+    ) -> None:
+        """`/foods/recent` must not be parsed as `/foods/{food_id}`."""
+        response = await client.get("/v1/nutrition/foods/recent", headers=headers)
+        assert response.status_code == 200
+        assert "items" in response.json()
+
+    async def test_the_detail_route_does_not_swallow_favourites(
+        self, client: AsyncClient, headers: dict
+    ) -> None:
+        response = await client.get("/v1/nutrition/foods/favourites", headers=headers)
+        assert response.status_code == 200
+        assert "items" in response.json()
+
+    async def test_a_food_with_no_measured_nutrients_returns_an_empty_list(
+        self, client: AsyncClient, headers: dict
+    ) -> None:
+        """Curated rows carry macros only. Absent is not zero, and not an error."""
+        feta = await food_named(client, headers, "Φέτα")
+        response = await client.get(f"/v1/nutrition/foods/{feta['id']}", headers=headers)
+        assert response.json()["nutrients"] == []
+
+    async def test_an_unknown_food_is_a_404(self, client: AsyncClient, headers: dict) -> None:
+        response = await client.get(
+            "/v1/nutrition/foods/018f0000-0000-7000-8000-000000000000", headers=headers
+        )
+        assert response.status_code == 404
+
+    async def test_another_users_food_is_a_404(
+        self, client: AsyncClient, headers: dict, other_headers: dict
+    ) -> None:
+        created = await client.post(
+            "/v1/nutrition/foods",
+            json={"name": "Μυστικό", "caloriesPer100g": "100", "proteinPer100g": "25"},
+            headers=headers,
+        )
+        response = await client.get(
+            f"/v1/nutrition/foods/{created.json()['id']}", headers=other_headers
+        )
+        assert response.status_code == 404

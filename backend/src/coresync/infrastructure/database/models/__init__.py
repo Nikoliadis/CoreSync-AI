@@ -9,6 +9,7 @@ from coresync.infrastructure.database.base import Base
 from coresync.infrastructure.database.models.achievements import UserAchievementModel
 from coresync.infrastructure.database.models.aggregates import (
     DailyActivitySummaryModel,
+    DailyNutritionSummaryModel,
     ExerciseStatisticsModel,
     UserStreakModel,
 )
@@ -90,6 +91,7 @@ __all__ = [
     "Base",
     "BodyMeasurementModel",
     "DailyActivitySummaryModel",
+    "DailyNutritionSummaryModel",
     "DiaryEntryModel",
     "EquipmentModel",
     "ExerciseCategoryModel",

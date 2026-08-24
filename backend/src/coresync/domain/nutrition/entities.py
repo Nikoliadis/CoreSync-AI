@@ -44,6 +44,12 @@ class FoodSource(StrEnum):
     USER = "user"
 
 
+class SubmissionStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
 class TrustTier(IntEnum):
     """How much the data can be relied on. Search ranks by this before anything else.
 
@@ -436,3 +442,30 @@ class Recipe:
 
     def per_serving(self, foods: dict[UUID, Food]) -> Macros:
         return self.total_macros(foods).scaled(Decimal(1) / self.servings_count).rounded()
+
+
+@dataclass(slots=True)
+class FoodSubmission:
+    """A private food put forward for the shared catalogue.
+
+    Approval promotes it to trust tier 2, never tier 1. Tier 1 means a curator wrote
+    those numbers; tier 2 means a reviewer checked somebody else's. Collapsing the two
+    would put the verified badge on data nobody authored.
+    """
+
+    id: UUID
+    food_id: UUID
+    submitted_by: UUID | None
+    status: SubmissionStatus = SubmissionStatus.PENDING
+    note: str | None = None
+    reviewed_by: UUID | None = None
+    reviewed_at: datetime | None = None
+    created_at: datetime | None = None
+
+    @classmethod
+    def create(cls, *, food_id: UUID, user_id: UUID, note: str | None = None) -> FoodSubmission:
+        return cls(id=uuid7(), food_id=food_id, submitted_by=user_id, note=note)
+
+    @property
+    def is_open(self) -> bool:
+        return self.status is SubmissionStatus.PENDING

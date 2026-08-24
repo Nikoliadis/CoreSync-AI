@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
+from decimal import Decimal
 from typing import Protocol
 from uuid import UUID
 
@@ -80,3 +81,30 @@ class RateLimiter(Protocol):
     async def reset(self, key: str) -> None:
         """Clear a counter. Best-effort — failure must not fail the caller's operation."""
         ...
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalFood:
+    """A product from an outside catalogue, before it becomes a row of ours."""
+
+    barcode: str
+    name: str
+    brand: str | None
+    calories_per_100g: Decimal
+    protein_per_100g: Decimal
+    carbs_per_100g: Decimal
+    fat_per_100g: Decimal
+    alcohol_per_100g: Decimal
+    is_liquid: bool
+    serving_grams: Decimal | None = None
+
+
+class ExternalFoodLookup(Protocol):
+    """Somewhere to ask when a scanned barcode is not in our catalogue.
+
+    Returns ``None`` for a miss *and* for an outage: a scan that cannot be resolved is
+    "we don't have that yet", never an error page. The caller cannot tell the difference
+    and should not need to.
+    """
+
+    async def by_barcode(self, barcode: str) -> ExternalFood | None: ...

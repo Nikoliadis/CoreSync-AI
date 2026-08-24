@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BadgeCheck, Plus, Search, UtensilsCrossed } from "lucide-react";
+import { BadgeCheck, Info, Plus, Search, Star, UtensilsCrossed } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -24,6 +24,7 @@ import {
   nutritionKeys,
 } from "@/features/nutrition/api";
 import { CreateFoodDialog } from "@/features/nutrition/components/create-food-dialog";
+import { FoodDetailDialog } from "@/features/nutrition/components/food-detail-dialog";
 import { kcal, portion } from "@/features/nutrition/format";
 import { useDebouncedValue } from "@/lib/utils/use-debounced-value";
 
@@ -46,6 +47,7 @@ export function FoodSearchDialog({ open, onOpenChange, mealType, localDate }: Pr
   const [term, setTerm] = useState("");
   const [selected, setSelected] = useState<Food | null>(null);
   const [creating, setCreating] = useState(false);
+  const [inspecting, setInspecting] = useState<string | null>(null);
 
   // 250ms: long enough that a typed word is one request rather than six, short enough
   // that the list feels like it is keeping up.
@@ -68,8 +70,27 @@ export function FoodSearchDialog({ open, onOpenChange, mealType, localDate }: Pr
     enabled: open && debounced.trim().length === 0,
   });
 
+  // Loaded alongside so a starred food can be marked in the list without a second
+  // round trip per row.
+  const favourites = useQuery({
+    queryKey: nutritionKeys.favourites(),
+    queryFn: nutritionApi.favourites,
+    enabled: open,
+    staleTime: 60_000,
+  });
+
   const showing = debounced.trim().length > 0 ? results : recent;
   const items = showing.data?.items ?? [];
+
+  if (inspecting) {
+    return (
+      <FoodDetailDialog
+        foodId={inspecting}
+        isFavourite={favourites.data?.some((f) => f.id === inspecting)}
+        onClose={() => setInspecting(null)}
+      />
+    );
+  }
 
   if (creating) {
     return (
@@ -157,15 +178,21 @@ export function FoodSearchDialog({ open, onOpenChange, mealType, localDate }: Pr
 
           <ul className="flex flex-col gap-1">
             {items.map((food) => (
-              <li key={food.id}>
+              <li key={food.id} className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => setSelected(food)}
-                  className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-surface-well focus-visible:bg-surface-well"
+                  className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-surface-well focus-visible:bg-surface-well"
                 >
                   <span className="min-w-0">
                     <span className="flex items-center gap-1.5">
                       <span className="truncate text-body text-text">{food.name}</span>
+                      {favourites.data?.some((f) => f.id === food.id) && (
+                        <Star
+                          className="h-3.5 w-3.5 shrink-0 fill-accent text-accent"
+                          aria-label="Starred"
+                        />
+                      )}
                       {food.isVerified && (
                         <BadgeCheck
                           className="h-3.5 w-3.5 shrink-0 text-accent"
@@ -178,6 +205,14 @@ export function FoodSearchDialog({ open, onOpenChange, mealType, localDate }: Pr
                       {food.isLiquid ? " per 100 ml" : " per 100 g"}
                     </span>
                   </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInspecting(food.id)}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-well hover:text-text"
+                  aria-label={`Details for ${food.name}`}
+                >
+                  <Info className="h-4 w-4" aria-hidden />
                 </button>
               </li>
             ))}

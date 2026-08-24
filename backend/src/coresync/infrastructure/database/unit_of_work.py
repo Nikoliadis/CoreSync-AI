@@ -36,6 +36,8 @@ from coresync.infrastructure.database.repositories.notifications import (
 from coresync.infrastructure.database.repositories.nutrition import (
     SqlAlchemyDiaryRepository,
     SqlAlchemyFoodRepository,
+    SqlAlchemyFoodSubmissionRepository,
+    SqlAlchemyNutritionSummaryRepository,
     SqlAlchemyRecipeRepository,
     SqlAlchemyWaterRepository,
 )
@@ -125,6 +127,8 @@ class SqlAlchemyUnitOfWork:
         self.diary = SqlAlchemyDiaryRepository(session)
         self.water = SqlAlchemyWaterRepository(session)
         self.recipes = SqlAlchemyRecipeRepository(session)
+        self.nutrition_summaries = SqlAlchemyNutritionSummaryRepository(session)
+        self.food_submissions = SqlAlchemyFoodSubmissionRepository(session)
 
     async def __aexit__(
         self,

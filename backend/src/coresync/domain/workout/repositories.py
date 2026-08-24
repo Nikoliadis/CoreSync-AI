@@ -264,6 +264,16 @@ class StreakRepository(Protocol):
 
     async def register_workout(self, user_id: UUID, workout_date: date) -> Streak: ...
 
+    async def set_nutrition(
+        self, user_id: UUID, *, current: int, longest: int, last_date: date | None
+    ) -> None:
+        """Nutrition streaks are recomputed from the summaries rather than incremented.
+
+        Unlike a workout, a logged day can appear retroactively — someone fills in
+        yesterday this morning — so an increment would be wrong as often as it was right.
+        """
+        ...
+
 
 class SyncOperationLogRepository(Protocol):
     """Records which client operation ids have been applied.

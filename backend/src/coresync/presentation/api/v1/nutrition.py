@@ -8,6 +8,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
 
+from coresync.application.nutrition.moderation import SubmitFoodUseCase
 from coresync.application.nutrition.recipes import (
     DeleteRecipeUseCase,
     GetRecipeUseCase,
@@ -18,9 +19,18 @@ from coresync.application.nutrition.recipes import (
     RecipeView,
     SaveRecipeUseCase,
 )
+from coresync.application.nutrition.summaries import (
+    GetNutritionHistoryUseCase,
+    GetNutritionStreakUseCase,
+)
 from coresync.application.nutrition.use_cases import (
+    CopyDayUseCase,
     CreateCustomFoodUseCase,
+    DeleteCustomFoodUseCase,
     DeleteDiaryEntryUseCase,
+    EditCustomFoodUseCase,
+    EditDiaryEntryUseCase,
+    FavouriteFoodsUseCase,
     GetDiaryUseCase,
     LogFoodCommand,
     LogFoodUseCase,
@@ -33,22 +43,32 @@ from coresync.domain.nutrition.entities import Food, MealType
 from coresync.presentation import dependencies as deps
 from coresync.presentation.schemas.common import ErrorResponse
 from coresync.presentation.schemas.nutrition import (
+    CopyDayRequest,
+    CopyDayResponse,
     CreateFoodRequest,
+    DailySummaryResponse,
     DiaryEntryResponse,
     DiaryResponse,
+    EditDiaryEntryRequest,
+    FoodDetailResponse,
     FoodResponse,
     FoodSearchResponse,
     FoodServingResponse,
+    FoodSubmissionResponse,
     LogFoodRequest,
     LogRecipeRequest,
     LogWaterRequest,
     MacrosResponse,
     MealTotalsResponse,
+    NutrientResponse,
+    NutritionHistoryResponse,
+    NutritionStreakResponse,
     QuickAddRequest,
     RecipeIngredientResponse,
     RecipeListResponse,
     RecipeResponse,
     SaveRecipeRequest,
+    SubmitFoodRequest,
     WaterResponse,
 )
 
@@ -293,6 +313,72 @@ async def quick_add(
     )
 
 
+@router.patch(
+    "/diary/{entry_id}",
+    response_model=DiaryEntryResponse,
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    summary="Correct a diary entry",
+    description=(
+        "Every field is optional — send only what changed. Changing the amount "
+        "re-derives the macros from the food rather than scaling the stored numbers, so "
+        "repeated corrections do not drift on rounding."
+    ),
+)
+async def edit_entry(
+    entry_id: UUID,
+    body: EditDiaryEntryRequest,
+    user: deps.CurrentUser,
+    use_case: Annotated[EditDiaryEntryUseCase, Depends(deps.edit_diary_entry_use_case)],
+) -> DiaryEntryResponse:
+    entry = await use_case.execute(
+        entry_id,
+        user.id,
+        quantity=body.quantity,
+        meal_type=MealType(body.meal_type) if body.meal_type else None,
+        serving_id=body.serving_id,
+        local_date=body.local_date,
+    )
+    return DiaryEntryResponse(
+        id=entry.id,
+        local_date=entry.local_date,
+        meal_type=entry.meal_type.value,
+        display_name=entry.display_name,
+        quantity=entry.quantity,
+        total_grams=entry.total_grams,
+        macros=_macros(entry.macros),
+        food_id=entry.food_id,
+        recipe_id=entry.recipe_id,
+        serving_id=entry.serving_id,
+        logged_at=entry.logged_at,
+    )
+
+
+@router.post(
+    "/diary/copy",
+    response_model=CopyDayResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={400: {"model": ErrorResponse}},
+    summary="Copy a day, or one meal, onto another day",
+    description=(
+        "Snapshots are copied verbatim rather than re-derived. What was eaten on Tuesday "
+        "is a fact about Tuesday, and a copy that disagreed with its source would be "
+        "worse than no copy at all."
+    ),
+)
+async def copy_day(
+    body: CopyDayRequest,
+    user: deps.CurrentUser,
+    use_case: Annotated[CopyDayUseCase, Depends(deps.copy_day_use_case)],
+) -> CopyDayResponse:
+    copies = await use_case.execute(
+        user.id,
+        source=body.source_date,
+        target=body.target_date,
+        meal_type=MealType(body.meal_type) if body.meal_type else None,
+    )
+    return CopyDayResponse(copied=len(copies), target_date=body.target_date)
+
+
 @router.delete(
     "/diary/{entry_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -306,6 +392,124 @@ async def delete_entry(
     use_case: Annotated[DeleteDiaryEntryUseCase, Depends(deps.delete_diary_entry_use_case)],
 ) -> None:
     await use_case.execute(entry_id, user.id)
+
+
+# ------------------------------------------------------------------- favourites
+@router.get(
+    "/foods/favourites",
+    response_model=FoodSearchResponse,
+    summary="Foods you starred",
+    description="Ranked directly below your own foods in search, above trust tier.",
+)
+async def list_favourites(
+    user: deps.CurrentUser,
+    use_case: Annotated[FavouriteFoodsUseCase, Depends(deps.favourite_foods_use_case)],
+) -> FoodSearchResponse:
+    items = await use_case.list(user.id)
+    return FoodSearchResponse(items=[_food_response(f) for f in items], total=len(items))
+
+
+@router.put(
+    "/foods/{food_id}/favourite",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={404: {"model": ErrorResponse}},
+    summary="Star a food",
+    description="Idempotent — starring something already starred is not an error.",
+)
+async def add_favourite(
+    food_id: UUID,
+    user: deps.CurrentUser,
+    use_case: Annotated[FavouriteFoodsUseCase, Depends(deps.favourite_foods_use_case)],
+) -> None:
+    await use_case.add(user.id, food_id)
+
+
+@router.delete(
+    "/foods/{food_id}/favourite",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Unstar a food",
+)
+async def remove_favourite(
+    food_id: UUID,
+    user: deps.CurrentUser,
+    use_case: Annotated[FavouriteFoodsUseCase, Depends(deps.favourite_foods_use_case)],
+) -> None:
+    await use_case.remove(user.id, food_id)
+
+
+@router.get(
+    "/foods/{food_id}",
+    response_model=FoodDetailResponse,
+    responses={404: {"model": ErrorResponse}},
+    summary="One food, with its full nutrient breakdown",
+    description=(
+        "Kept apart from search: returning every nutrient for twenty-five search results "
+        "would be an order of magnitude more bytes for data nobody is looking at yet. "
+        "The breakdown is only as complete as the source — most community rows carry a "
+        "handful of nutrients, not all twenty-nine."
+    ),
+)
+async def food_detail(
+    food_id: UUID,
+    user: deps.CurrentUser,
+    use_case: Annotated[SearchFoodsUseCase, Depends(deps.search_foods_use_case)],
+) -> FoodDetailResponse:
+    food, nutrients = await use_case.detail(user.id, food_id)
+    return FoodDetailResponse(
+        food=_food_response(food),
+        nutrients=[
+            NutrientResponse(
+                code=n.code, name=n.name, unit=n.unit, amount_per_100g=n.amount_per_100g
+            )
+            for n in nutrients
+        ],
+    )
+
+
+@router.put(
+    "/foods/{food_id}",
+    response_model=FoodResponse,
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    summary="Correct one of your own foods",
+    description=(
+        "Your own foods only. Meals already logged against it keep the numbers they were "
+        "logged with — correcting a food never rewrites history."
+    ),
+)
+async def update_food(
+    food_id: UUID,
+    body: CreateFoodRequest,
+    user: deps.CurrentUser,
+    use_case: Annotated[EditCustomFoodUseCase, Depends(deps.edit_food_use_case)],
+) -> FoodResponse:
+    food = await use_case.execute(
+        food_id,
+        user.id,
+        name=body.name,
+        calories_per_100g=body.calories_per_100g,
+        protein_per_100g=body.protein_per_100g,
+        carbs_per_100g=body.carbs_per_100g,
+        fat_per_100g=body.fat_per_100g,
+        alcohol_per_100g=body.alcohol_per_100g,
+        is_liquid=body.is_liquid,
+        servings=[(s.label, s.grams) for s in body.servings],
+    )
+    return _food_response(food)
+
+
+@router.delete(
+    "/foods/{food_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={404: {"model": ErrorResponse}},
+    summary="Delete one of your own foods",
+    description="Soft delete, so recipes and diary entries that reference it stay intact.",
+)
+async def delete_food(
+    food_id: UUID,
+    user: deps.CurrentUser,
+    use_case: Annotated[DeleteCustomFoodUseCase, Depends(deps.delete_food_use_case)],
+) -> None:
+    await use_case.execute(food_id, user.id)
 
 
 # ------------------------------------------------------------------------ water
@@ -500,4 +704,89 @@ async def log_recipe(
         macros=_macros(entry.macros),
         recipe_id=entry.recipe_id,
         logged_at=entry.logged_at,
+    )
+
+
+# ------------------------------------------------------------------- summaries
+@router.get(
+    "/history",
+    response_model=NutritionHistoryResponse,
+    summary="Daily totals over a range",
+    description=(
+        "Read from pre-computed daily summaries rather than re-aggregating raw entries, "
+        "so a thirty-day chart is one query. Days with nothing logged are absent rather "
+        "than zero — the client can tell 'ate nothing' from 'logged nothing'."
+    ),
+)
+async def nutrition_history(
+    user: deps.CurrentUser,
+    use_case: Annotated[GetNutritionHistoryUseCase, Depends(deps.nutrition_history_use_case)],
+    days: Annotated[int, Query(ge=1, le=365)] = 30,
+) -> NutritionHistoryResponse:
+    summaries = await use_case.execute(user.id, days=days)
+    return NutritionHistoryResponse(
+        items=[
+            DailySummaryResponse(
+                local_date=s.local_date,
+                calories=s.calories,
+                protein_g=s.protein_g,
+                carbs_g=s.carbs_g,
+                fat_g=s.fat_g,
+                alcohol_g=s.alcohol_g,
+                water_ml=s.water_ml,
+                entry_count=s.entry_count,
+                target_calories=s.target_calories,
+                target_protein_g=s.target_protein_g,
+            )
+            for s in summaries
+        ]
+    )
+
+
+@router.get(
+    "/streak",
+    response_model=NutritionStreakResponse,
+    summary="Consecutive days logged",
+    description=(
+        "A day counts if anything was logged on it, regardless of calories — a fasting "
+        "day must not break a streak the person believes they kept. Today not being "
+        "logged yet does not break it either; yesterday not being logged does."
+    ),
+)
+async def nutrition_streak_endpoint(
+    user: deps.CurrentUser,
+    use_case: Annotated[GetNutritionStreakUseCase, Depends(deps.nutrition_streak_use_case)],
+) -> NutritionStreakResponse:
+    streak = await use_case.execute(user.id)
+    return NutritionStreakResponse(
+        current=streak.current, longest=streak.longest, last_date=streak.last_date
+    )
+
+
+@router.post(
+    "/foods/{food_id}/submit",
+    response_model=FoodSubmissionResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    summary="Offer one of your foods to the shared catalogue",
+    description=(
+        "Puts it in a review queue. Nothing reaches the shared catalogue without a "
+        "person checking the numbers first — food data quality is the risk this phase "
+        "is built around. Submitting twice is not an error; the first request stands."
+    ),
+)
+async def submit_food(
+    food_id: UUID,
+    body: SubmitFoodRequest,
+    user: deps.CurrentUser,
+    use_case: Annotated[SubmitFoodUseCase, Depends(deps.submit_food_use_case)],
+) -> FoodSubmissionResponse:
+    submission = await use_case.execute(food_id, user.id, note=body.note)
+    return FoodSubmissionResponse(
+        id=submission.id,
+        food_id=submission.food_id,
+        status=submission.status.value,
+        note=submission.note,
+        created_at=submission.created_at,
+        reviewed_at=submission.reviewed_at,
     )

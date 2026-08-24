@@ -48,6 +48,7 @@ from coresync.application.common.dto import AuthenticatedUser
 from coresync.application.common.ports import (
     BreachedPasswordChecker,
     EmailSender,
+    ExternalFoodLookup,
     OidcVerifier,
     RateLimiter,
     TokenRevocationStore,
@@ -80,6 +81,11 @@ from coresync.application.notifications.use_cases import (
     NotificationPreferencesUseCase,
     PublishNotificationUseCase,
 )
+from coresync.application.nutrition.moderation import (
+    ListSubmissionQueueUseCase,
+    ReviewSubmissionUseCase,
+    SubmitFoodUseCase,
+)
 from coresync.application.nutrition.recipes import (
     DeleteRecipeUseCase,
     GetRecipeUseCase,
@@ -87,9 +93,18 @@ from coresync.application.nutrition.recipes import (
     LogRecipeUseCase,
     SaveRecipeUseCase,
 )
+from coresync.application.nutrition.summaries import (
+    GetNutritionHistoryUseCase,
+    GetNutritionStreakUseCase,
+)
 from coresync.application.nutrition.use_cases import (
+    CopyDayUseCase,
     CreateCustomFoodUseCase,
+    DeleteCustomFoodUseCase,
     DeleteDiaryEntryUseCase,
+    EditCustomFoodUseCase,
+    EditDiaryEntryUseCase,
+    FavouriteFoodsUseCase,
     GetDiaryUseCase,
     LogFoodUseCase,
     LogWaterUseCase,
@@ -176,6 +191,7 @@ from coresync.domain.progress.services import (
 from coresync.domain.workout.services import PersonalRecordDetector, VolumeCalculator
 from coresync.infrastructure.database.session import Database
 from coresync.infrastructure.database.unit_of_work import SqlAlchemyUnitOfWork
+from coresync.infrastructure.external.openfoodfacts import OpenFoodFactsLookup
 
 # auto_error=False so a missing header raises our own error shape, not FastAPI's.
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -211,6 +227,10 @@ class AppContainer:
     embedding_gateway: EmbeddingGateway | None
     tool_registry: ToolRegistry
     chat_quota: ChatQuota
+    # Where a scanned barcode is looked up when the local catalogue misses. None
+    # disables the fallback entirely, which is what the test suite uses so a scan never
+    # depends on a third party being up.
+    external_foods: ExternalFoodLookup | None = None
 
     def unit_of_work(self) -> UnitOfWork:
         return SqlAlchemyUnitOfWork(self.database.session_factory)
@@ -676,8 +696,8 @@ def notification_prefs_use_case(uow: Uow) -> NotificationPreferencesUseCase:
     return NotificationPreferencesUseCase(uow=uow)
 
 
-def search_foods_use_case(uow: Uow) -> SearchFoodsUseCase:
-    return SearchFoodsUseCase(uow=uow)
+def search_foods_use_case(c: Container, uow: Uow) -> SearchFoodsUseCase:
+    return SearchFoodsUseCase(uow=uow, external_foods=c.external_foods)
 
 
 def create_food_use_case(uow: Uow) -> CreateCustomFoodUseCase:
@@ -696,8 +716,48 @@ def delete_diary_entry_use_case(uow: Uow) -> DeleteDiaryEntryUseCase:
     return DeleteDiaryEntryUseCase(uow=uow)
 
 
+def edit_diary_entry_use_case(uow: Uow) -> EditDiaryEntryUseCase:
+    return EditDiaryEntryUseCase(uow=uow)
+
+
+def copy_day_use_case(uow: Uow) -> CopyDayUseCase:
+    return CopyDayUseCase(uow=uow)
+
+
+def favourite_foods_use_case(uow: Uow) -> FavouriteFoodsUseCase:
+    return FavouriteFoodsUseCase(uow=uow)
+
+
+def edit_food_use_case(uow: Uow) -> EditCustomFoodUseCase:
+    return EditCustomFoodUseCase(uow=uow)
+
+
+def delete_food_use_case(uow: Uow) -> DeleteCustomFoodUseCase:
+    return DeleteCustomFoodUseCase(uow=uow)
+
+
 def log_water_use_case(c: Container, uow: Uow) -> LogWaterUseCase:
     return LogWaterUseCase(uow=uow, clock=c.clock)
+
+
+def nutrition_history_use_case(c: Container, uow: Uow) -> GetNutritionHistoryUseCase:
+    return GetNutritionHistoryUseCase(uow=uow, clock=c.clock)
+
+
+def nutrition_streak_use_case(c: Container, uow: Uow) -> GetNutritionStreakUseCase:
+    return GetNutritionStreakUseCase(uow=uow, clock=c.clock)
+
+
+def submit_food_use_case(uow: Uow) -> SubmitFoodUseCase:
+    return SubmitFoodUseCase(uow=uow)
+
+
+def submission_queue_use_case(uow: Uow) -> ListSubmissionQueueUseCase:
+    return ListSubmissionQueueUseCase(uow=uow)
+
+
+def review_submission_use_case(c: Container, uow: Uow) -> ReviewSubmissionUseCase:
+    return ReviewSubmissionUseCase(uow=uow, clock=c.clock)
 
 
 def list_recipes_use_case(uow: Uow) -> ListRecipesUseCase:
@@ -753,7 +813,10 @@ def build_container(settings: Settings) -> AppContainer:
         ModelRouter,
         build_azure_client,
     )
-    from coresync.infrastructure.external.oidc import AppleOidcVerifier, GoogleOidcVerifier
+    from coresync.infrastructure.external.oidc import (
+        AppleOidcVerifier,
+        GoogleOidcVerifier,
+    )
     from coresync.infrastructure.notifications.email import (
         ConsoleEmailSender,
         SmtpEmailSender,
@@ -820,6 +883,7 @@ def build_container(settings: Settings) -> AppContainer:
         llm_gateway=llm_gateway,
         embedding_gateway=embedding_gateway,
         tool_registry=ToolRegistry(),
+        external_foods=OpenFoodFactsLookup(),
         chat_quota=ChatQuota(
             daily_message_limit=settings.ai_free_daily_message_limit,
             daily_cost_ceiling_usd=Decimal(str(settings.ai_free_daily_cost_ceiling_usd)),

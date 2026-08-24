@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, field_serializer
 
 from coresync.presentation.schemas.common import ApiModel
 
@@ -23,7 +23,19 @@ def per_100g(**kwargs: object) -> Any:
     return Field(alias=f"{field}Per100g", **kwargs)  # type: ignore[arg-type]
 
 
+_MACRO_PLACES = Decimal("0.01")
+
+
 class MacrosResponse(ApiModel):
+    """Macros on the wire, always at two decimal places.
+
+    Without normalising, the same quantity is serialised differently depending on where
+    it came from: freshly computed the domain rounds to two places, while a value read
+    back from a Numeric(9,3) column arrives with three. A client comparing the strings —
+    to spot a change, or to key a cache — would see "11.00" and "11.000" as different
+    numbers. One value, one wire form.
+    """
+
     calories: Decimal
     protein_g: Decimal
     carbs_g: Decimal
@@ -31,6 +43,10 @@ class MacrosResponse(ApiModel):
     # Ethanol, at 7 kcal/g. Reported because it is where the calories in a drink come
     # from; a client that only renders the three macros can ignore it and still add up.
     alcohol_g: Decimal = Decimal(0)
+
+    @field_serializer("calories", "protein_g", "carbs_g", "fat_g", "alcohol_g")
+    def _two_places(self, value: Decimal) -> Decimal:
+        return value.quantize(_MACRO_PLACES)
 
 
 class FoodServingResponse(ApiModel):
@@ -57,6 +73,27 @@ class FoodResponse(ApiModel):
     servings: list[FoodServingResponse] = Field(default_factory=list)
 
 
+class NutrientResponse(ApiModel):
+    code: str
+    name: str
+    # 'g', 'mg', 'mcg' or 'IU' — the unit a label prints, so the client renders the
+    # number without doing arithmetic.
+    unit: str
+    amount_per_100g: Decimal
+
+
+class FoodDetailResponse(ApiModel):
+    """A food and everything measured about it.
+
+    Separate from the search response on purpose: a search returning the full nutrient
+    breakdown for twenty-five results would be an order of magnitude more bytes for data
+    nobody is looking at yet.
+    """
+
+    food: FoodResponse
+    nutrients: list[NutrientResponse] = Field(default_factory=list)
+
+
 class FoodSearchResponse(ApiModel):
     items: list[FoodResponse]
     total: int
@@ -78,6 +115,30 @@ class CreateFoodRequest(ApiModel):
     alcohol_per_100g: Decimal = per_100g(field_name="alcohol", default=Decimal(0), ge=0, le=100)
     is_liquid: bool = False
     servings: list[CreateFoodServingRequest] = Field(default_factory=list, max_length=10)
+
+
+class EditDiaryEntryRequest(ApiModel):
+    """Every field optional: this is a correction, not a re-log.
+
+    Sending only `quantity` moves the amount and leaves the meal and the day alone.
+    """
+
+    quantity: Decimal | None = Field(default=None, gt=0, le=10_000)
+    meal_type: str | None = Field(default=None, pattern=MEAL_PATTERN)
+    serving_id: UUID | None = None
+    local_date: date | None = None
+
+
+class CopyDayRequest(ApiModel):
+    source_date: date
+    target_date: date
+    # Null copies the whole day; a meal name copies just that meal.
+    meal_type: str | None = Field(default=None, pattern=MEAL_PATTERN)
+
+
+class CopyDayResponse(ApiModel):
+    copied: int
+    target_date: date
 
 
 class DiaryEntryResponse(ApiModel):
@@ -198,3 +259,67 @@ class LogRecipeRequest(ApiModel):
     meal_type: str = Field(pattern=MEAL_PATTERN)
     servings: Decimal = Field(gt=0, le=100)
     local_date: date | None = None
+
+
+# ------------------------------------------------------------------- summaries
+class DailySummaryResponse(ApiModel):
+    local_date: date
+    calories: Decimal
+    protein_g: Decimal
+    carbs_g: Decimal
+    fat_g: Decimal
+    alcohol_g: Decimal
+    water_ml: Decimal
+    # How the streak counts this day. Zero means nothing was logged.
+    entry_count: int
+    target_calories: Decimal | None = None
+    target_protein_g: Decimal | None = None
+
+
+class NutritionHistoryResponse(ApiModel):
+    items: list[DailySummaryResponse]
+
+
+class NutritionStreakResponse(ApiModel):
+    """Days in a row with something logged.
+
+    Counted over logged days rather than calories: a fasting day, or a day of nothing
+    but black coffee, is still a day the person showed up.
+    """
+
+    current: int
+    longest: int
+    last_date: date | None = None
+
+
+# ------------------------------------------------------------------ moderation
+class SubmitFoodRequest(ApiModel):
+    note: str | None = Field(default=None, max_length=500)
+
+
+class FoodSubmissionResponse(ApiModel):
+    id: UUID
+    food_id: UUID
+    status: str
+    note: str | None = None
+    created_at: datetime | None = None
+    reviewed_at: datetime | None = None
+
+
+class QueuedSubmissionResponse(ApiModel):
+    """A queue row with the numbers attached, so a reviewer never has to go look them up."""
+
+    submission: FoodSubmissionResponse
+    food: FoodResponse
+    # False when the macros only just cleared the energy tolerance. Not a blocker —
+    # the database already refused anything outside it — but it is where a reviewer's
+    # attention is worth most.
+    energy_is_consistent: bool
+
+
+class SubmissionQueueResponse(ApiModel):
+    items: list[QueuedSubmissionResponse]
+
+
+class ReviewSubmissionRequest(ApiModel):
+    note: str | None = Field(default=None, max_length=500)

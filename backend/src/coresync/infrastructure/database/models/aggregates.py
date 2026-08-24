@@ -63,6 +63,36 @@ class DailyActivitySummaryModel(Base):
     )
 
 
+class DailyNutritionSummaryModel(Base):
+    """One row per user per day. The mirror of `daily_activity_summaries`."""
+
+    __tablename__ = "daily_nutrition_summaries"
+
+    user_id: Mapped[UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    local_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    calories: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, server_default="0")
+    protein_g: Mapped[Decimal] = mapped_column(Numeric(10, 3), nullable=False, server_default="0")
+    carbs_g: Mapped[Decimal] = mapped_column(Numeric(10, 3), nullable=False, server_default="0")
+    fat_g: Mapped[Decimal] = mapped_column(Numeric(10, 3), nullable=False, server_default="0")
+    alcohol_g: Mapped[Decimal] = mapped_column(Numeric(10, 3), nullable=False, server_default="0")
+    water_ml: Mapped[Decimal] = mapped_column(Numeric(10, 3), nullable=False, server_default="0")
+    # The streak counts logged days, not calories: a fasting day is still a logged day.
+    entry_count: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="0")
+    target_calories: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    target_protein_g: Mapped[Decimal | None] = mapped_column(Numeric(10, 3))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("now()"), nullable=False
+    )
+
+    __table_args__ = (
+        CheckConstraint("calories >= 0", name="summary_calories_positive"),
+        CheckConstraint("entry_count >= 0", name="summary_entries_positive"),
+        Index("ix_daily_nutrition_user_date", "user_id", text("local_date DESC")),
+    )
+
+
 class ExerciseStatisticsModel(Base):
     """Per-user, per-exercise rollup.
 

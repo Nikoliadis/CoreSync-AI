@@ -152,6 +152,47 @@ export type SaveRecipeInput = {
   ingredients: { foodId: string; grams: number }[];
 };
 
+export type DailySummary = {
+  localDate: string;
+  calories: string;
+  proteinG: string;
+  carbsG: string;
+  fatG: string;
+  alcoholG: string;
+  waterMl: string;
+  /** Zero means the day was logged and then emptied; absent means never logged. */
+  entryCount: number;
+  targetCalories: string | null;
+  targetProteinG: string | null;
+};
+
+export type NutritionStreak = {
+  current: number;
+  longest: number;
+  lastDate: string | null;
+};
+
+export type EditEntryInput = {
+  quantity?: number;
+  mealType?: MealType;
+  servingId?: string | null;
+  localDate?: string;
+};
+
+export type NutrientRow = {
+  code: string;
+  name: string;
+  /** 'g' | 'mg' | 'mcg' | 'IU' — the unit a label prints. */
+  unit: string;
+  amountPer100g: string;
+};
+
+export type FoodDetail = {
+  food: Food;
+  /** Only what the source measured. Most community rows carry a handful, not all. */
+  nutrients: NutrientRow[];
+};
+
 export const nutritionKeys = {
   all: ["nutrition"] as const,
   diary: (on?: string) => [...nutritionKeys.all, "diary", on ?? "today"] as const,
@@ -160,6 +201,10 @@ export const nutritionKeys = {
   recent: () => [...nutritionKeys.all, "recent"] as const,
   recipes: () => [...nutritionKeys.all, "recipes"] as const,
   recipe: (id: string) => [...nutritionKeys.all, "recipe", id] as const,
+  favourites: () => [...nutritionKeys.all, "favourites"] as const,
+  history: (days: number) => [...nutritionKeys.all, "history", days] as const,
+  streak: () => [...nutritionKeys.all, "streak"] as const,
+  food: (id: string) => [...nutritionKeys.all, "food", id] as const,
 };
 
 export const nutritionApi = {
@@ -191,6 +236,13 @@ export const nutritionApi = {
 
   deleteEntry: (entryId: string) => api.delete<void>(`/v1/nutrition/diary/${entryId}`),
 
+  /** Send only what changed — the server leaves the rest alone. */
+  editEntry: (entryId: string, input: EditEntryInput) =>
+    api.patch<DiaryEntry>(`/v1/nutrition/diary/${entryId}`, input),
+
+  copyDay: (input: { sourceDate: string; targetDate: string; mealType?: MealType }) =>
+    api.post<{ copied: number; targetDate: string }>("/v1/nutrition/diary/copy", input),
+
   water: (on?: string) =>
     api.get<Water>(on ? `/v1/nutrition/water?on=${on}` : "/v1/nutrition/water"),
 
@@ -212,4 +264,28 @@ export const nutritionApi = {
 
   logRecipe: (id: string, input: { mealType: MealType; servings: number; localDate?: string }) =>
     api.post<DiaryEntry>(`/v1/nutrition/recipes/${id}/log`, input),
+
+  updateFood: (id: string, input: CreateFoodInput) =>
+    api.put<Food>(`/v1/nutrition/foods/${id}`, input),
+
+  deleteFood: (id: string) => api.delete<void>(`/v1/nutrition/foods/${id}`),
+
+  favourites: () =>
+    api.get<FoodSearchResult>("/v1/nutrition/foods/favourites").then((r) => r.items),
+
+  addFavourite: (id: string) => api.put<void>(`/v1/nutrition/foods/${id}/favourite`, {}),
+
+  removeFavourite: (id: string) => api.delete<void>(`/v1/nutrition/foods/${id}/favourite`),
+
+  submitFood: (id: string, note?: string) =>
+    api.post<{ id: string; status: string }>(`/v1/nutrition/foods/${id}/submit`, { note }),
+
+  history: (days = 30) =>
+    api
+      .get<{ items: DailySummary[] }>(`/v1/nutrition/history?days=${days}`)
+      .then((r) => r.items),
+
+  streak: () => api.get<NutritionStreak>("/v1/nutrition/streak"),
+
+  food: (id: string) => api.get<FoodDetail>(`/v1/nutrition/foods/${id}`),
 };
