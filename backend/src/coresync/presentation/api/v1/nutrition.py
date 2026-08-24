@@ -8,6 +8,16 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
 
+from coresync.application.nutrition.recipes import (
+    DeleteRecipeUseCase,
+    GetRecipeUseCase,
+    IngredientInput,
+    ListRecipesUseCase,
+    LogRecipeCommand,
+    LogRecipeUseCase,
+    RecipeView,
+    SaveRecipeUseCase,
+)
 from coresync.application.nutrition.use_cases import (
     CreateCustomFoodUseCase,
     DeleteDiaryEntryUseCase,
@@ -30,10 +40,15 @@ from coresync.presentation.schemas.nutrition import (
     FoodSearchResponse,
     FoodServingResponse,
     LogFoodRequest,
+    LogRecipeRequest,
     LogWaterRequest,
     MacrosResponse,
     MealTotalsResponse,
     QuickAddRequest,
+    RecipeIngredientResponse,
+    RecipeListResponse,
+    RecipeResponse,
+    SaveRecipeRequest,
     WaterResponse,
 )
 
@@ -319,3 +334,170 @@ async def log_water(
 ) -> WaterResponse:
     day, total = await use_case.execute(user.id, millilitres=body.millilitres, on=body.local_date)
     return WaterResponse(local_date=day, total_ml=total)
+
+
+# ---------------------------------------------------------------------- recipes
+def _recipe_response(view: RecipeView) -> RecipeResponse:
+    return RecipeResponse(
+        id=view.recipe.id,
+        name=view.recipe.name,
+        servings_count=view.recipe.servings_count,
+        notes=view.recipe.notes,
+        ingredients=[
+            RecipeIngredientResponse(
+                id=ingredient.id,
+                food_id=ingredient.food_id,
+                # Resolved from the loaded food rather than the stored label, so a
+                # renamed food shows its current name here. A recipe is a definition:
+                # it is meant to track the catalogue.
+                food_name=(
+                    food.name
+                    if (food := view.foods.get(ingredient.food_id)) is not None
+                    else ingredient.display_name or "Unknown ingredient"
+                ),
+                grams=ingredient.grams,
+            )
+            for ingredient in view.recipe.ingredients
+        ],
+        total=_macros(view.total),
+        per_serving=_macros(view.per_serving),
+        has_missing_ingredients=view.has_missing_ingredients,
+    )
+
+
+@router.get(
+    "/recipes",
+    response_model=RecipeListResponse,
+    summary="Your recipes",
+    description=(
+        "Totals are computed on read from the current ingredient macros, never stored. "
+        "Correcting a food corrects every recipe that uses it."
+    ),
+)
+async def list_recipes(
+    user: deps.CurrentUser,
+    use_case: Annotated[ListRecipesUseCase, Depends(deps.list_recipes_use_case)],
+) -> RecipeListResponse:
+    views = await use_case.execute(user.id)
+    return RecipeListResponse(items=[_recipe_response(view) for view in views])
+
+
+@router.get(
+    "/recipes/{recipe_id}",
+    response_model=RecipeResponse,
+    responses={404: {"model": ErrorResponse}},
+    summary="One recipe with its ingredients",
+)
+async def get_recipe(
+    recipe_id: UUID,
+    user: deps.CurrentUser,
+    use_case: Annotated[GetRecipeUseCase, Depends(deps.get_recipe_use_case)],
+) -> RecipeResponse:
+    return _recipe_response(await use_case.execute(recipe_id, user.id))
+
+
+@router.post(
+    "/recipes",
+    response_model=RecipeResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={400: {"model": ErrorResponse}},
+    summary="Create a recipe",
+)
+async def create_recipe(
+    body: SaveRecipeRequest,
+    user: deps.CurrentUser,
+    use_case: Annotated[SaveRecipeUseCase, Depends(deps.save_recipe_use_case)],
+) -> RecipeResponse:
+    view = await use_case.create(
+        user.id,
+        name=body.name,
+        servings_count=body.servings_count,
+        notes=body.notes,
+        ingredients=[IngredientInput(food_id=i.food_id, grams=i.grams) for i in body.ingredients],
+    )
+    return _recipe_response(view)
+
+
+@router.put(
+    "/recipes/{recipe_id}",
+    response_model=RecipeResponse,
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    summary="Replace a recipe",
+    description=(
+        "PUT rather than PATCH: the ingredient list is sent whole. Editing a recipe is a "
+        "session of several changes, and reconciling them client-side is the least "
+        "reliable place for that logic."
+    ),
+)
+async def update_recipe(
+    recipe_id: UUID,
+    body: SaveRecipeRequest,
+    user: deps.CurrentUser,
+    use_case: Annotated[SaveRecipeUseCase, Depends(deps.save_recipe_use_case)],
+) -> RecipeResponse:
+    view = await use_case.update(
+        recipe_id,
+        user.id,
+        name=body.name,
+        servings_count=body.servings_count,
+        notes=body.notes,
+        ingredients=[IngredientInput(food_id=i.food_id, grams=i.grams) for i in body.ingredients],
+    )
+    return _recipe_response(view)
+
+
+@router.delete(
+    "/recipes/{recipe_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={404: {"model": ErrorResponse}},
+    summary="Delete a recipe",
+    description=(
+        "Soft delete. Diary entries logged from it keep their snapshotted numbers and "
+        "are untouched."
+    ),
+)
+async def delete_recipe(
+    recipe_id: UUID,
+    user: deps.CurrentUser,
+    use_case: Annotated[DeleteRecipeUseCase, Depends(deps.delete_recipe_use_case)],
+) -> None:
+    await use_case.execute(recipe_id, user.id)
+
+
+@router.post(
+    "/recipes/{recipe_id}/log",
+    response_model=DiaryEntryResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={400: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    summary="Log servings of a recipe",
+    description=(
+        "The per-serving macros are resolved now and snapshotted into the entry, exactly "
+        "as a food is. Editing the recipe afterwards never rewrites what you ate."
+    ),
+)
+async def log_recipe(
+    recipe_id: UUID,
+    body: LogRecipeRequest,
+    user: deps.CurrentUser,
+    use_case: Annotated[LogRecipeUseCase, Depends(deps.log_recipe_use_case)],
+) -> DiaryEntryResponse:
+    entry = await use_case.execute(
+        LogRecipeCommand(
+            user_id=user.id,
+            recipe_id=recipe_id,
+            meal_type=MealType(body.meal_type),
+            servings=body.servings,
+            local_date=body.local_date,
+        )
+    )
+    return DiaryEntryResponse(
+        id=entry.id,
+        local_date=entry.local_date,
+        meal_type=entry.meal_type.value,
+        display_name=entry.display_name,
+        quantity=entry.quantity,
+        total_grams=entry.total_grams,
+        macros=_macros(entry.macros),
+        recipe_id=entry.recipe_id,
+        logged_at=entry.logged_at,
+    )

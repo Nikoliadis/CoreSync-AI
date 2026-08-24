@@ -121,12 +121,45 @@ export type CreateFoodInput = {
   servings?: { label: string; grams: number }[];
 };
 
+export type RecipeIngredient = {
+  id: string;
+  foodId: string;
+  foodName: string;
+  grams: string;
+};
+
+export type Recipe = {
+  id: string;
+  name: string;
+  servingsCount: string;
+  notes: string | null;
+  ingredients: RecipeIngredient[];
+  /** Computed on read from the current ingredient macros, never stored. */
+  total: Macros;
+  perServing: Macros;
+  /**
+   * An ingredient's food is gone. The totals under-report while this is set, so the UI
+   * says so rather than showing a confidently wrong number.
+   */
+  hasMissingIngredients: boolean;
+};
+
+export type SaveRecipeInput = {
+  name: string;
+  servingsCount: number;
+  notes?: string | null;
+  /** The complete list, every time — the API replaces rather than patches. */
+  ingredients: { foodId: string; grams: number }[];
+};
+
 export const nutritionKeys = {
   all: ["nutrition"] as const,
   diary: (on?: string) => [...nutritionKeys.all, "diary", on ?? "today"] as const,
   water: (on?: string) => [...nutritionKeys.all, "water", on ?? "today"] as const,
   search: (q: string) => [...nutritionKeys.all, "search", q] as const,
   recent: () => [...nutritionKeys.all, "recent"] as const,
+  recipes: () => [...nutritionKeys.all, "recipes"] as const,
+  recipe: (id: string) => [...nutritionKeys.all, "recipe", id] as const,
 };
 
 export const nutritionApi = {
@@ -163,4 +196,20 @@ export const nutritionApi = {
 
   logWater: (millilitres: number, localDate?: string) =>
     api.post<Water>("/v1/nutrition/water", { millilitres, localDate }),
+
+  recipes: () =>
+    api.get<{ items: Recipe[] }>("/v1/nutrition/recipes").then((data) => data.items),
+
+  recipe: (id: string) => api.get<Recipe>(`/v1/nutrition/recipes/${id}`),
+
+  createRecipe: (input: SaveRecipeInput) =>
+    api.post<Recipe>("/v1/nutrition/recipes", input),
+
+  updateRecipe: (id: string, input: SaveRecipeInput) =>
+    api.put<Recipe>(`/v1/nutrition/recipes/${id}`, input),
+
+  deleteRecipe: (id: string) => api.delete<void>(`/v1/nutrition/recipes/${id}`),
+
+  logRecipe: (id: string, input: { mealType: MealType; servings: number; localDate?: string }) =>
+    api.post<DiaryEntry>(`/v1/nutrition/recipes/${id}/log`, input),
 };

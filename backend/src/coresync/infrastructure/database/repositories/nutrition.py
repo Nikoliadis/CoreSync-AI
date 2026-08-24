@@ -448,6 +448,24 @@ class SqlAlchemyRecipeRepository:
         )
         await self._session.flush()
 
+    async def update(self, recipe: Recipe) -> None:
+        await self._session.execute(
+            update(RecipeModel)
+            .where(
+                RecipeModel.id == recipe.id,
+                # The owner is in the predicate, not checked beforehand: this is the
+                # only place that guarantees a recipe cannot be edited by its id alone.
+                RecipeModel.user_id == recipe.user_id,
+                RecipeModel.deleted_at.is_(None),
+            )
+            .values(
+                name=recipe.name,
+                notes=recipe.notes,
+                servings_count=recipe.servings_count,
+            )
+        )
+        await self._session.flush()
+
     async def replace_ingredients(self, recipe: Recipe) -> None:
         existing = (
             await self._session.execute(

@@ -80,6 +80,13 @@ from coresync.application.notifications.use_cases import (
     NotificationPreferencesUseCase,
     PublishNotificationUseCase,
 )
+from coresync.application.nutrition.recipes import (
+    DeleteRecipeUseCase,
+    GetRecipeUseCase,
+    ListRecipesUseCase,
+    LogRecipeUseCase,
+    SaveRecipeUseCase,
+)
 from coresync.application.nutrition.use_cases import (
     CreateCustomFoodUseCase,
     DeleteDiaryEntryUseCase,
@@ -691,6 +698,26 @@ def delete_diary_entry_use_case(uow: Uow) -> DeleteDiaryEntryUseCase:
 
 def log_water_use_case(c: Container, uow: Uow) -> LogWaterUseCase:
     return LogWaterUseCase(uow=uow, clock=c.clock)
+
+
+def list_recipes_use_case(uow: Uow) -> ListRecipesUseCase:
+    return ListRecipesUseCase(uow=uow)
+
+
+def get_recipe_use_case(uow: Uow) -> GetRecipeUseCase:
+    return GetRecipeUseCase(uow=uow)
+
+
+def save_recipe_use_case(uow: Uow) -> SaveRecipeUseCase:
+    return SaveRecipeUseCase(uow=uow)
+
+
+def delete_recipe_use_case(uow: Uow) -> DeleteRecipeUseCase:
+    return DeleteRecipeUseCase(uow=uow)
+
+
+def log_recipe_use_case(c: Container, uow: Uow) -> LogRecipeUseCase:
+    return LogRecipeUseCase(uow=uow, clock=c.clock)
 
 
 def list_achievements_use_case(uow: Uow) -> ListAchievementsUseCase:

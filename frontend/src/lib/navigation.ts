@@ -6,6 +6,7 @@ import {
   Bot,
   CalendarDays,
   Camera,
+  ChefHat,
   Droplets,
   Dumbbell,
   History,
@@ -26,10 +27,10 @@ export type NavItem = {
   /**
    * Marks a destination whose backend does not exist yet.
    *
-   * Phase 3 (nutrition) was never built and progress photos were deferred in
-   * Phase 4, so these routes render an honest "not yet" rather than a page wired
-   * to invented data. Keeping them in the nav — visibly pending — is more useful
-   * than hiding the product's shape.
+   * The meal planner plans against the food catalogue, which is not yet large enough
+   * to plan with, and progress photos were deferred in Phase 4. Both render an honest
+   * "not yet" rather than a page wired to invented data. Keeping them in the nav —
+   * visibly pending — is more useful than hiding the product's shape.
    */
   pending?: boolean;
 };
@@ -54,9 +55,10 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: "Fuel",
     items: [
-      { href: "/nutrition", label: "Nutrition", icon: Apple, pending: true },
+      { href: "/nutrition", label: "Nutrition", icon: Apple },
+      { href: "/nutrition/recipes", label: "Recipes", icon: ChefHat },
       { href: "/nutrition/planner", label: "Meal Planner", icon: UtensilsCrossed, pending: true },
-      { href: "/nutrition/water", label: "Water", icon: Droplets, pending: true },
+      { href: "/nutrition/water", label: "Water", icon: Droplets },
     ],
   },
   {

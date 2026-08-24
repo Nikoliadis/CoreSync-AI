@@ -371,6 +371,132 @@ class TestRecipes:
             Recipe.create(user_id=USER, name="Nothing", servings_count=_zero())
 
 
+class TestLoggingARecipe:
+    """Where a definition becomes a record.
+
+    The recipe keeps referencing its ingredients so it tracks corrections to food data.
+    The entry it produces keeps a snapshot, so nothing that happens afterwards can
+    rewrite what was eaten. Both halves are load-bearing.
+    """
+
+    def _recipe(self, chicken: Food, *, servings: int = 2, grams: int = 400) -> Recipe:
+        recipe = Recipe.create(
+            user_id=USER, name="Batch cook", servings_count=Decimal(servings)
+        )
+        recipe.ingredients = [ingredient(recipe.id, chicken.id, grams)]
+        return recipe
+
+    def test_one_serving_takes_the_per_serving_macros(self) -> None:
+        chicken = food()
+        recipe = self._recipe(chicken)
+
+        entry = DiaryEntry.for_recipe(
+            user_id=USER,
+            local_date=TODAY,
+            meal_type=MealType.DINNER,
+            recipe=recipe,
+            servings=Decimal(1),
+            foods={chicken.id: chicken},
+        )
+        # 400 g of chicken at 165 kcal/100 g is 660, halved across two servings.
+        assert entry.macros.calories == Decimal("330.00")
+        assert entry.total_grams == Decimal("200.000")
+
+    def test_two_servings_double_it(self) -> None:
+        chicken = food()
+        recipe = self._recipe(chicken)
+
+        entry = DiaryEntry.for_recipe(
+            user_id=USER,
+            local_date=TODAY,
+            meal_type=MealType.DINNER,
+            recipe=recipe,
+            servings=Decimal(2),
+            foods={chicken.id: chicken},
+        )
+        assert entry.macros.calories == Decimal("660.00")
+
+    def test_half_a_serving_halves_it(self) -> None:
+        chicken = food()
+        recipe = self._recipe(chicken)
+
+        entry = DiaryEntry.for_recipe(
+            user_id=USER,
+            local_date=TODAY,
+            meal_type=MealType.LUNCH,
+            recipe=recipe,
+            servings=Decimal("0.5"),
+            foods={chicken.id: chicken},
+        )
+        assert entry.macros.calories == Decimal("165.00")
+
+    def test_the_entry_points_at_the_recipe_not_a_food(self) -> None:
+        chicken = food()
+        recipe = self._recipe(chicken)
+
+        entry = DiaryEntry.for_recipe(
+            user_id=USER,
+            local_date=TODAY,
+            meal_type=MealType.DINNER,
+            recipe=recipe,
+            servings=Decimal(1),
+            foods={chicken.id: chicken},
+        )
+        assert entry.recipe_id == recipe.id
+        assert entry.food_id is None
+        assert entry.display_name == "Batch cook"
+
+    def test_editing_the_recipe_afterwards_does_not_move_the_entry(self) -> None:
+        """The snapshot rule, stated as a test.
+
+        Doubling tonight's batch must not retroactively double what last night's dinner
+        is reported to have been.
+        """
+        chicken = food()
+        recipe = self._recipe(chicken)
+
+        entry = DiaryEntry.for_recipe(
+            user_id=USER,
+            local_date=TODAY,
+            meal_type=MealType.DINNER,
+            recipe=recipe,
+            servings=Decimal(1),
+            foods={chicken.id: chicken},
+        )
+        eaten = entry.macros.calories
+
+        recipe.ingredients = [ingredient(recipe.id, chicken.id, 800)]
+        assert entry.macros.calories == eaten
+
+    def test_a_missing_ingredient_under_reports_rather_than_inventing(self) -> None:
+        chicken = food()
+        recipe = self._recipe(chicken)
+        recipe.ingredients.append(ingredient(recipe.id, uuid4(), 400))
+
+        entry = DiaryEntry.for_recipe(
+            user_id=USER,
+            local_date=TODAY,
+            meal_type=MealType.DINNER,
+            recipe=recipe,
+            servings=Decimal(1),
+            foods={chicken.id: chicken},
+        )
+        assert entry.macros.calories == Decimal("330.00")
+
+    def test_zero_servings_is_refused(self) -> None:
+        chicken = food()
+        recipe = self._recipe(chicken)
+        with pytest.raises(ValueError):
+            DiaryEntry.for_recipe(
+                user_id=USER,
+                local_date=TODAY,
+                meal_type=MealType.DINNER,
+                recipe=recipe,
+                servings=_zero(),
+                foods={chicken.id: chicken},
+            )
+
+
 class TestValidation:
     def test_a_food_needs_a_name(self) -> None:
         with pytest.raises(ValueError):

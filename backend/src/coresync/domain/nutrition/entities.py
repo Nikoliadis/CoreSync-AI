@@ -300,6 +300,47 @@ class DiaryEntry:
         )
 
     @classmethod
+    def for_recipe(
+        cls,
+        *,
+        user_id: UUID,
+        local_date: date,
+        meal_type: MealType,
+        recipe: Recipe,
+        servings: Decimal,
+        foods: dict[UUID, Food],
+    ) -> DiaryEntry:
+        """Log servings of a recipe.
+
+        The recipe's per-serving macros are resolved *now* and snapshotted, exactly as a
+        food is. This is where the two rules meet: the recipe keeps referencing its
+        ingredients so it stays correct as food data is corrected, while the entry keeps
+        the numbers that were true at the moment it was eaten.
+        """
+        if servings <= _ZERO:
+            raise ValueError("Log an amount greater than zero.")
+
+        per_serving = recipe.per_serving(foods)
+        grams = (
+            sum(
+                (ingredient.grams for ingredient in recipe.ingredients),
+                _ZERO,
+            )
+            / recipe.servings_count
+        )
+        return cls(
+            id=uuid7(),
+            user_id=user_id,
+            local_date=local_date,
+            meal_type=meal_type,
+            quantity=servings,
+            total_grams=_round(grams * servings),
+            macros=per_serving.scaled(servings).rounded(),
+            recipe_id=recipe.id,
+            display_name=recipe.name,
+        )
+
+    @classmethod
     def quick_add(
         cls,
         *,

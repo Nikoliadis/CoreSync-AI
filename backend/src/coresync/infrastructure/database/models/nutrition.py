@@ -217,7 +217,7 @@ class RecipeIngredientModel(Base):
         PgUUID(as_uuid=True), ForeignKey("recipes.id", ondelete="CASCADE"), nullable=False
     )
     food_id: Mapped[UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("foods.id", ondelete="RESTRICT"), nullable=False
+        PgUUID(as_uuid=True), ForeignKey("foods.id", ondelete="CASCADE"), nullable=False
     )
     grams: Mapped[Decimal] = mapped_column(Numeric(9, 3), nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
@@ -246,9 +246,11 @@ class DiaryEntryModel(SoftDeleteMixin, TimestampMixin, Base):
     )
     local_date: Mapped[date] = mapped_column(Date, nullable=False)
     meal_type: Mapped[str] = mapped_column(Text, nullable=False)
-    # RESTRICT: you cannot delete a food somebody has eaten.
+    # SET NULL: the entry already holds its own snapshot of the macros and the name, so
+    # losing the back-reference costs nothing. CASCADE would delete the record of what was
+    # eaten, and RESTRICT would make the owner of the food undeletable.
     food_id: Mapped[UUID | None] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("foods.id", ondelete="RESTRICT")
+        PgUUID(as_uuid=True), ForeignKey("foods.id", ondelete="SET NULL")
     )
     recipe_id: Mapped[UUID | None] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("recipes.id", ondelete="RESTRICT")

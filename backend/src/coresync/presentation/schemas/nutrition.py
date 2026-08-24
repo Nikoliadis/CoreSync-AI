@@ -148,3 +148,53 @@ class LogWaterRequest(ApiModel):
 class WaterResponse(ApiModel):
     local_date: date
     total_ml: Decimal
+
+
+# ---------------------------------------------------------------------- recipes
+class RecipeIngredientResponse(ApiModel):
+    id: UUID
+    food_id: UUID
+    food_name: str
+    grams: Decimal
+
+
+class RecipeResponse(ApiModel):
+    id: UUID
+    name: str
+    servings_count: Decimal
+    notes: str | None = None
+    ingredients: list[RecipeIngredientResponse] = Field(default_factory=list)
+    total: MacrosResponse
+    per_serving: MacrosResponse
+    # True when an ingredient's food no longer exists. The totals under-report while it
+    # is set, and a client that hides this shows a confidently wrong number.
+    has_missing_ingredients: bool = False
+
+
+class RecipeListResponse(ApiModel):
+    items: list[RecipeResponse]
+
+
+class RecipeIngredientRequest(ApiModel):
+    food_id: UUID
+    grams: Decimal = Field(gt=0, le=10_000)
+
+
+class SaveRecipeRequest(ApiModel):
+    """The whole recipe, every time.
+
+    Ingredients are sent as a complete list rather than a diff: editing a recipe is a
+    session of several changes, and reconciling them client-side is the least reliable
+    place to put that logic.
+    """
+
+    name: str = Field(min_length=1, max_length=200)
+    servings_count: Decimal = Field(gt=0, le=100)
+    notes: str | None = Field(default=None, max_length=2000)
+    ingredients: list[RecipeIngredientRequest] = Field(default_factory=list, max_length=60)
+
+
+class LogRecipeRequest(ApiModel):
+    meal_type: str = Field(pattern=MEAL_PATTERN)
+    servings: Decimal = Field(gt=0, le=100)
+    local_date: date | None = None

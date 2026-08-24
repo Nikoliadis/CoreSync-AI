@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BadgeCheck, Search, UtensilsCrossed } from "lucide-react";
+import { BadgeCheck, Plus, Search, UtensilsCrossed } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -23,6 +23,7 @@ import {
   nutritionApi,
   nutritionKeys,
 } from "@/features/nutrition/api";
+import { CreateFoodDialog } from "@/features/nutrition/components/create-food-dialog";
 import { kcal, portion } from "@/features/nutrition/format";
 import { useDebouncedValue } from "@/lib/utils/use-debounced-value";
 
@@ -44,6 +45,7 @@ export function FoodSearchDialog({ open, onOpenChange, mealType, localDate }: Pr
   const queryClient = useQueryClient();
   const [term, setTerm] = useState("");
   const [selected, setSelected] = useState<Food | null>(null);
+  const [creating, setCreating] = useState(false);
 
   // 250ms: long enough that a typed word is one request rather than six, short enough
   // that the list feels like it is keeping up.
@@ -68,6 +70,21 @@ export function FoodSearchDialog({ open, onOpenChange, mealType, localDate }: Pr
 
   const showing = debounced.trim().length > 0 ? results : recent;
   const items = showing.data?.items ?? [];
+
+  if (creating) {
+    return (
+      <CreateFoodDialog
+        initialName={term.trim()}
+        onCancel={() => setCreating(false)}
+        // Straight to the portion step: they came here to log something, and making
+        // them find the food they just typed in would be a pointless detour.
+        onCreated={(food) => {
+          setCreating(false);
+          setSelected(food);
+        }}
+      />
+    );
+  }
 
   if (selected) {
     return (
@@ -127,8 +144,13 @@ export function FoodSearchDialog({ open, onOpenChange, mealType, localDate }: Pr
               }
               description={
                 debounced.trim().length > 0
-                  ? "Try a shorter word, or add it as your own food."
+                  ? "Try a shorter word, or add it yourself."
                   : "Foods you log will show up here for next time."
+              }
+              action={
+                debounced.trim().length > 0 ? (
+                  <Button onClick={() => setCreating(true)}>Add it yourself</Button>
+                ) : undefined
               }
             />
           )}
@@ -160,6 +182,17 @@ export function FoodSearchDialog({ open, onOpenChange, mealType, localDate }: Pr
               </li>
             ))}
           </ul>
+
+          {items.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              className="mt-2 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-caption text-text-muted transition-colors hover:bg-surface-well hover:text-text-secondary"
+            >
+              <Plus className="h-4 w-4 shrink-0" aria-hidden />
+              Not here? Add your own food
+            </button>
+          )}
         </div>
       </DialogContent>
     </Dialog>
