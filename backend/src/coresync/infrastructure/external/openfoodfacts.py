@@ -31,6 +31,22 @@ from coresync.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+
+class OffPaginationError(RuntimeError):
+    """A page could not be fetched after every retry.
+
+    Raised rather than returned so a truncated run cannot be mistaken for a complete
+    one. Silently stopping and reporting success is the worst failure mode available
+    here: a scheduled import would stay green while the catalogue sat at a fraction of
+    its size, and nobody would look.
+    """
+
+    def __init__(self, page: int, status: int | None) -> None:
+        super().__init__(f"Open Food Facts returned {status} for page {page}")
+        self.page = page
+        self.status = status
+
+
 BASE_URL = "https://world.openfoodfacts.org"
 
 # OFF asks for a descriptive agent so they can contact operators of heavy clients. An
@@ -50,7 +66,10 @@ REQUEST_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 # it limits. 503 and 429 are "come back later", not failure, so they are retried with
 # exponential backoff; anything else is a real error and returns immediately.
 RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
-MAX_RETRIES = 5
+# OFF's search endpoint is genuinely flaky under a bulk read — probing consecutive
+# pages returns 200, 503, 503, 200 with no pattern. Six attempts with the backoff
+# below spans about two minutes, which clears most of it.
+MAX_RETRIES = 6
 BACKOFF_BASE_SECONDS = 2.0
 # Courtesy delay between pages. Politeness is also self-interest: the alternative to
 # pacing ourselves is being blocked partway through a twelve-thousand-row import.
@@ -334,7 +353,7 @@ class OpenFoodFactsClient:
             if response is None or response.status_code >= 400:
                 status = None if response is None else response.status_code
                 logger.warning("off_search_status", country=country, page=page, status=status)
-                return
+                raise OffPaginationError(page, status)
 
             try:
                 products = (response.json() or {}).get("products") or []

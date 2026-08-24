@@ -38,7 +38,11 @@ from coresync.infrastructure.database.models.nutrition import (
     FoodServingModel,
 )
 from coresync.infrastructure.database.session import Database
-from coresync.infrastructure.external.openfoodfacts import OffProduct, OpenFoodFactsClient
+from coresync.infrastructure.external.openfoodfacts import (
+    OffPaginationError,
+    OffProduct,
+    OpenFoodFactsClient,
+)
 from coresync.infrastructure.seed.nutrients import NUTRIENT_CODES, nutrient_id
 
 logger = get_logger(__name__)
@@ -60,10 +64,18 @@ class ImportStats:
     written: int = 0
     rejected_energy: int = 0
     rejected_examples: list[tuple[str, int, int]] = field(default_factory=list)
+    # True when the source stopped answering before the catalogue was exhausted. What
+    # was written is still good; there is simply more of it out there.
+    truncated: bool = False
+    stopped_at_page: int | None = None
 
     @property
     def rejection_rate(self) -> float:
         return 0.0 if self.seen == 0 else self.rejected_energy / self.seen
+
+    @property
+    def is_complete(self) -> bool:
+        return not self.truncated
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -71,6 +83,8 @@ class ImportStats:
             "written": self.written,
             "rejected_energy": self.rejected_energy,
             "rejection_rate": round(self.rejection_rate, 4),
+            "truncated": self.truncated,
+            "stopped_at_page": self.stopped_at_page,
         }
 
 
@@ -220,13 +234,22 @@ async def import_country(
     if owned:
         await off.__aenter__()
     try:
-        async for product in off.search_country(country, max_pages=max_pages):
-            stats.seen += 1
-            if not accepts(product, stats):
-                continue
-            batch.append(product)
-            if len(batch) >= BATCH_SIZE:
-                await flush()
+        try:
+            async for product in off.search_country(country, max_pages=max_pages):
+                stats.seen += 1
+                if not accepts(product, stats):
+                    continue
+                batch.append(product)
+                if len(batch) >= BATCH_SIZE:
+                    await flush()
+        except OffPaginationError as exc:
+            # Keep everything already fetched — the import is resumable by design, and
+            # throwing away good rows because the source wobbled would be worse. But
+            # say so loudly, so a partial catalogue is never mistaken for a complete one.
+            stats.truncated = True
+            stopped_at = exc.page
+            stats.stopped_at_page = stopped_at
+            logger.warning("off_import_truncated", country=country, page=stopped_at)
         await flush()
     finally:
         if owned:
@@ -259,6 +282,15 @@ async def _main(settings: Settings | None = None) -> None:
         stats = await import_country(session, country=args.country, max_pages=args.max_pages)
     await database.dispose()
     logger.info("off_import_finished", country=args.country, **stats.as_dict())
+
+    if stats.truncated:
+        # Non-zero exit, so a scheduled run fails visibly rather than reporting success
+        # over a catalogue that is a fraction of its intended size. Re-running resumes:
+        # ids are derived from the barcode, so what already landed is simply upserted.
+        raise SystemExit(
+            f"Import truncated at page {stats.stopped_at_page}. "
+            f"{stats.written} products written; re-run to continue."
+        )
 
 
 if __name__ == "__main__":  # pragma: no cover

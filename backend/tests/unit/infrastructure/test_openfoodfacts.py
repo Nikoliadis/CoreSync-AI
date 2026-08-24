@@ -16,9 +16,12 @@ from typing import Any
 import pytest
 
 from coresync.infrastructure.external.openfoodfacts import (
+    OffPaginationError,
+    OffProduct,
     _serving_grams,
     parse_product,
 )
+from coresync.infrastructure.seed.off_import import ImportStats, accepts
 
 
 def product(**overrides: Any) -> dict[str, Any]:
@@ -242,3 +245,108 @@ class TestServingSize:
     )
     def test_unrecognised_forms_are_dropped(self, raw: str | None) -> None:
         assert _serving_grams(raw) is None
+
+
+class TestTruncationIsVisible:
+    """A partial import must never look like a complete one.
+
+    Open Food Facts answers a bulk read with intermittent 503s — consecutive pages come
+    back 200, 503, 503, 200 with no pattern. The first version of this importer stopped
+    at the first exhausted page and logged `off_import_finished`, so a scheduled run
+    would have reported success over a catalogue a fraction of its intended size and
+    nobody would have looked.
+    """
+
+    def test_stats_start_complete(self) -> None:
+        stats = ImportStats()
+        assert stats.is_complete is True
+        assert stats.as_dict()["truncated"] is False
+
+    def test_a_truncated_run_says_so(self) -> None:
+        stats = ImportStats(seen=528, written=518, truncated=True, stopped_at_page=6)
+        assert stats.is_complete is False
+        assert stats.as_dict()["truncated"] is True
+        assert stats.as_dict()["stopped_at_page"] == 6
+
+    def test_the_rejection_rate_survives_truncation(self) -> None:
+        """What was fetched is still good data, and its quality is still measurable."""
+        stats = ImportStats(seen=100, written=98, rejected_energy=2, truncated=True)
+        assert stats.rejection_rate == pytest.approx(0.02)
+
+    def test_the_pagination_error_carries_the_page_and_status(self) -> None:
+        error = OffPaginationError(6, 503)
+        assert error.page == 6
+        assert error.status == 503
+        assert "503" in str(error)
+        assert "6" in str(error)
+
+
+class TestEnergyRejection:
+    def test_a_row_whose_macros_contradict_its_calories_is_counted(self) -> None:
+        """Real Open Food Facts data. Hellmann's states 292 kcal; its macros imply 712."""
+        stats = ImportStats()
+        mayonnaise = OffProduct(
+            barcode="1",
+            name="Hellmann's",
+            brand=None,
+            calories_per_100g=Decimal("292"),
+            protein_per_100g=Decimal("1"),
+            carbs_per_100g=Decimal("2"),
+            fat_per_100g=Decimal("78"),
+            alcohol_per_100g=Decimal(0),
+            is_liquid=False,
+        )
+        assert accepts(mayonnaise, stats) is False
+        assert stats.rejected_energy == 1
+        assert stats.rejected_examples[0][0] == "Hellmann's"
+
+    def test_a_sound_row_is_accepted(self) -> None:
+        stats = ImportStats()
+        yoghurt = OffProduct(
+            barcode="2",
+            name="Γιαούρτι",
+            brand=None,
+            calories_per_100g=Decimal("59"),
+            protein_per_100g=Decimal("10"),
+            carbs_per_100g=Decimal("3.6"),
+            fat_per_100g=Decimal("2"),
+            alcohol_per_100g=Decimal(0),
+            is_liquid=False,
+        )
+        assert accepts(yoghurt, stats) is True
+        assert stats.rejected_energy == 0
+
+    def test_a_spirit_is_accepted_because_alcohol_is_a_term(self) -> None:
+        """The reason migration 0009 exists, checked on the import path too."""
+        stats = ImportStats()
+        tsipouro = OffProduct(
+            barcode="3",
+            name="Τσίπουρο",
+            brand=None,
+            calories_per_100g=Decimal("225"),
+            protein_per_100g=Decimal(0),
+            carbs_per_100g=Decimal(0),
+            fat_per_100g=Decimal(0),
+            alcohol_per_100g=Decimal("32"),
+            is_liquid=True,
+        )
+        assert accepts(tsipouro, stats) is True
+
+    def test_only_the_first_twenty_rejections_are_kept_as_examples(self) -> None:
+        """A log line is a sample, not a dump. The count is the number that matters."""
+        stats = ImportStats()
+        bad = OffProduct(
+            barcode="x",
+            name="Wrong",
+            brand=None,
+            calories_per_100g=Decimal("40"),
+            protein_per_100g=Decimal("80"),
+            carbs_per_100g=Decimal("8"),
+            fat_per_100g=Decimal("6"),
+            alcohol_per_100g=Decimal(0),
+            is_liquid=False,
+        )
+        for _ in range(30):
+            accepts(bad, stats)
+        assert stats.rejected_energy == 30
+        assert len(stats.rejected_examples) == 20
