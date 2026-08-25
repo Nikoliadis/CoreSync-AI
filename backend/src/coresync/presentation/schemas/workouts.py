@@ -162,6 +162,11 @@ class UpdateSetRequest(ApiModel):
 class CompleteSessionRequest(ApiModel):
     perceived_effort: int | None = Field(default=None, ge=1, le=10)
     completed_at: datetime | None = None
+    paused_seconds: int = Field(
+        default=0,
+        ge=0,
+        description="Time the clock was stopped for, subtracted from the recorded duration.",
+    )
 
 
 class SessionSetResponse(ApiModel):
@@ -260,7 +265,8 @@ class SyncOperationRequest(ApiModel):
         max_length=40,
         description=(
             "session.create | session.update | session.complete | session.discard | "
-            "exercise.add | set.log | set.update | set.delete"
+            "exercise.add | exercise.remove | exercise.order | "
+            "set.log | set.update | set.delete"
         ),
     )
     at: datetime = Field(description="When the user performed it. Bounded by server time.")

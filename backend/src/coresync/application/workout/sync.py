@@ -45,6 +45,8 @@ from coresync.application.workout.sessions import (
     DiscardSessionUseCase,
     LogSetCommand,
     LogSetUseCase,
+    RemoveSessionExerciseUseCase,
+    ReorderSessionExercisesUseCase,
     StartSessionCommand,
     StartSessionUseCase,
     UpdateSessionCommand,
@@ -87,6 +89,8 @@ class SyncWorkoutsUseCase:
         start_session: StartSessionUseCase,
         update_session: UpdateSessionUseCase,
         add_exercise: AddSessionExerciseUseCase,
+        remove_exercise: RemoveSessionExerciseUseCase,
+        reorder_exercises: ReorderSessionExercisesUseCase,
         log_set: LogSetUseCase,
         update_set: UpdateSetUseCase,
         delete_set: DeleteSetUseCase,
@@ -98,6 +102,8 @@ class SyncWorkoutsUseCase:
         self._start_session = start_session
         self._update_session = update_session
         self._add_exercise = add_exercise
+        self._remove_exercise = remove_exercise
+        self._reorder_exercises = reorder_exercises
         self._log_set = log_set
         self._update_set = update_set
         self._delete_set = delete_set
@@ -221,6 +227,32 @@ class SyncWorkoutsUseCase:
         )
         return {}
 
+    async def _op_exercise_remove(self, user_id: UUID, operation: SyncOperation) -> dict[str, Any]:
+        payload = operation.payload
+        await self._remove_exercise.execute(
+            user_id,
+            _uuid(payload, "sessionId"),
+            _uuid(payload, "id"),
+        )
+        return {}
+
+    async def _op_exercise_order(self, user_id: UUID, operation: SyncOperation) -> dict[str, Any]:
+        """Reorder, sent as the whole resulting order rather than a move.
+
+        A move ("this one, up one place") is only meaningful against the list the client
+        had at the time. Replayed after some other operation has landed, it moves the
+        wrong exercise. Sending the full order makes the operation idempotent and its
+        outcome independent of what else is in the batch — which is the property the
+        whole queue depends on.
+        """
+        payload = operation.payload
+        raw = payload.get("exerciseIds")
+        if not isinstance(raw, list):
+            raise KeyError("missing 'exerciseIds'")
+        ordered = [value if isinstance(value, UUID) else UUID(str(value)) for value in raw]
+        await self._reorder_exercises.execute(user_id, _uuid(payload, "sessionId"), ordered)
+        return {}
+
     async def _op_set_log(self, user_id: UUID, operation: SyncOperation) -> dict[str, Any]:
         payload = operation.payload
         logged = await self._log_set.execute(
@@ -280,6 +312,7 @@ class SyncWorkoutsUseCase:
                 session_id=_uuid(payload, "id"),
                 perceived_effort=_optional_int(payload, "perceivedEffort"),
                 completed_at=_optional_datetime(payload, "completedAt") or operation.at,
+                paused_seconds=_optional_int(payload, "pausedSeconds") or 0,
             )
         )
         return {
@@ -306,6 +339,8 @@ class SyncWorkoutsUseCase:
         "session.create": _op_session_create,
         "session.update": _op_session_update,
         "exercise.add": _op_exercise_add,
+        "exercise.remove": _op_exercise_remove,
+        "exercise.order": _op_exercise_order,
         "set.log": _op_set_log,
         "set.update": _op_set_update,
         "set.delete": _op_set_delete,

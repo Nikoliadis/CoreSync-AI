@@ -28,6 +28,8 @@ export type OperationType =
   | "session.create"
   | "session.update"
   | "exercise.add"
+  | "exercise.remove"
+  | "exercise.order"
   | "set.log"
   | "set.update"
   | "set.delete"

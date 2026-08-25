@@ -268,6 +268,7 @@ async def complete_session(
             session_id=session_id,
             perceived_effort=body.perceived_effort,
             completed_at=body.completed_at,
+            paused_seconds=body.paused_seconds,
         )
     )
     return CompletedSessionResponse(

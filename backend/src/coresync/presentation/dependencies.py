@@ -618,6 +618,8 @@ def sync_use_case(c: Container) -> SyncWorkoutsUseCase:
         start_session=StartSessionUseCase(c.unit_of_work(), c.clock),
         update_session=UpdateSessionUseCase(c.unit_of_work()),
         add_exercise=AddSessionExerciseUseCase(c.unit_of_work()),
+        remove_exercise=RemoveSessionExerciseUseCase(c.unit_of_work()),
+        reorder_exercises=ReorderSessionExercisesUseCase(c.unit_of_work()),
         log_set=LogSetUseCase(c.unit_of_work(), c.clock),
         update_set=UpdateSetUseCase(c.unit_of_work()),
         delete_set=DeleteSetUseCase(c.unit_of_work()),

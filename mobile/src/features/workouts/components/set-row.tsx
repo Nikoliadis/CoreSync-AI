@@ -1,4 +1,4 @@
-import { Check } from "lucide-react-native";
+import { Check, Trophy } from "lucide-react-native";
 import { memo, useEffect, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
@@ -11,6 +11,8 @@ type Props = {
   set: LocalSet;
   /** What the previous session did for this set number, if anything. */
   previous?: string | null;
+  /** Whether this set beats the standing estimated-1RM record for the exercise. */
+  isRecord?: boolean;
   onChange: (changes: { reps?: number | null; weightKg?: number | null }) => void;
   onToggle: () => void;
   onDelete: () => void;
@@ -29,6 +31,7 @@ type Props = {
 export const SetRow = memo(function SetRow({
   set,
   previous,
+  isRecord = false,
   onChange,
   onToggle,
   onDelete,
@@ -57,6 +60,9 @@ export const SetRow = memo(function SetRow({
   };
 
   const canComplete = reps !== "" || weight !== "";
+  // Enforced here rather than trusted from the caller: a trophy that appears while a
+  // number is still being typed congratulates people for touching the keyboard.
+  const showRecord = isRecord && set.isCompleted;
 
   return (
     <View
@@ -74,9 +80,18 @@ export const SetRow = memo(function SetRow({
         {set.setNumber}
       </Text>
 
-      <Text variant="caption" tone="muted" style={styles.previous} numberOfLines={1}>
-        {previous ?? "—"}
-      </Text>
+      <View style={styles.previous}>
+        <Text variant="caption" tone="muted" numberOfLines={1} style={styles.previousText}>
+          {previous ?? "—"}
+        </Text>
+        {showRecord && (
+          <Trophy
+            size={13}
+            color={theme.accentText}
+            accessibilityLabel="Personal record"
+          />
+        )}
+      </View>
 
       <TextInput
         value={weight}
@@ -112,7 +127,11 @@ export const SetRow = memo(function SetRow({
         disabled={!canComplete && !set.isCompleted}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: set.isCompleted }}
-        accessibilityLabel={`Set ${set.setNumber} complete`}
+        accessibilityLabel={
+          showRecord
+            ? `Set ${set.setNumber} complete, personal record`
+            : `Set ${set.setNumber} complete`
+        }
         accessibilityHint="Long press to delete this set"
         style={({ pressed }) => [
           styles.tick,
@@ -144,7 +163,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   number: { width: 20, textAlign: "center" },
-  previous: { flex: 1 },
+  previous: { flex: 1, flexDirection: "row", alignItems: "center", gap: 4 },
+  previousText: { flexShrink: 1 },
   field: {
     width: 68,
     height: HIT_SIZE,

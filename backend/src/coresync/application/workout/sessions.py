@@ -611,6 +611,8 @@ class CompleteSessionCommand:
     session_id: UUID
     perceived_effort: int | None = None
     completed_at: datetime | None = None
+    #: Time the user stopped the clock for, subtracted from the recorded duration.
+    paused_seconds: int = 0
 
 
 class CompleteSessionUseCase:
@@ -647,7 +649,11 @@ class CompleteSessionUseCase:
                 completed_at = now
 
             try:
-                session.complete(at=completed_at, perceived_effort=cmd.perceived_effort)
+                session.complete(
+                    at=completed_at,
+                    perceived_effort=cmd.perceived_effort,
+                    paused_seconds=cmd.paused_seconds,
+                )
             except ValueError as exc:
                 raise ConflictError(str(exc)) from exc
 

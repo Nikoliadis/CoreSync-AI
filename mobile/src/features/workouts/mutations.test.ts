@@ -36,6 +36,8 @@ function session(overrides: Partial<import("./session-model").LocalSession> = {}
     startedAt: "2026-08-24T18:00:00.000Z",
     completedAt: null,
     notes: null,
+    pausedSeconds: 0,
+    pausedAt: null,
     exercises: [
       {
         id: "ex-1",
@@ -259,5 +261,168 @@ describe("every queued operation type", () => {
     for (const type of queuedTypes()) {
       expect(HANDLED.has(type), `${type} is not handled by the server`).toBe(true);
     }
+  });
+});
+
+describe("removing and reordering exercises", () => {
+  function twoExercises() {
+    const base = session();
+    const first = base.exercises[0]!;
+    return session({
+      exercises: [
+        first,
+        { ...first, id: "ex-2", exerciseId: "squat", exerciseName: "Back Squat", position: 1 },
+      ],
+    });
+  }
+
+  it("queues a removal even when nothing under it was completed", async () => {
+    // The `exercise.add` went up the moment it was chosen, so the server already holds
+    // an empty entry. Skipping the removal would leave it in the user's history.
+    const next = await mutations.removeExercise(session(), "ex-1");
+
+    expect(next.exercises).toEqual([]);
+    expect(queuedTypes()).toEqual(["exercise.remove"]);
+  });
+
+  it("names the session as well as the entry", async () => {
+    await mutations.removeExercise(session(), "ex-1");
+
+    const payload = queue.enqueue.mock.calls[0]?.[1] as { id: string; sessionId: string };
+    expect(payload).toEqual({ id: "ex-1", sessionId: "session-1" });
+  });
+
+  it("renumbers positions so a later reorder describes the same list", async () => {
+    const next = await mutations.removeExercise(twoExercises(), "ex-1");
+
+    expect(next.exercises.map((exercise) => exercise.position)).toEqual([0]);
+  });
+
+  it("persists before it queues", async () => {
+    await mutations.removeExercise(session(), "ex-1");
+
+    expect(store.saveSession.mock.invocationCallOrder[0]).toBeLessThan(
+      queue.enqueue.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("moves an exercise down and renumbers", async () => {
+    const next = await mutations.moveExercise(twoExercises(), "ex-1", 1);
+
+    expect(next.exercises.map((exercise) => exercise.id)).toEqual(["ex-2", "ex-1"]);
+    expect(next.exercises.map((exercise) => exercise.position)).toEqual([0, 1]);
+  });
+
+  it("moves an exercise up", async () => {
+    const next = await mutations.moveExercise(twoExercises(), "ex-2", -1);
+
+    expect(next.exercises.map((exercise) => exercise.id)).toEqual(["ex-2", "ex-1"]);
+  });
+
+  it("queues the whole resulting order rather than a move", async () => {
+    // A move ("up one place") only means something against the list the client had when
+    // it was made. Replayed later it moves the wrong exercise; an absolute order is a
+    // statement about the end state and survives being applied twice.
+    await mutations.moveExercise(twoExercises(), "ex-1", 1);
+
+    const [type, payload] = queue.enqueue.mock.calls[0] as [
+      string,
+      { sessionId: string; exerciseIds: string[] },
+    ];
+    expect(type).toBe("exercise.order");
+    expect(payload.exerciseIds).toEqual(["ex-2", "ex-1"]);
+  });
+
+  it("does nothing at the top of the list", async () => {
+    const before = twoExercises();
+    const next = await mutations.moveExercise(before, "ex-1", -1);
+
+    expect(next).toBe(before);
+    expect(queue.enqueue).not.toHaveBeenCalled();
+    expect(store.saveSession).not.toHaveBeenCalled();
+  });
+
+  it("does nothing at the bottom of the list", async () => {
+    const before = twoExercises();
+    const next = await mutations.moveExercise(before, "ex-2", 1);
+
+    expect(next).toBe(before);
+    expect(queue.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("ignores an exercise that is not in the session", async () => {
+    const before = twoExercises();
+    expect(await mutations.moveExercise(before, "missing", 1)).toBe(before);
+  });
+});
+
+describe("pausing and resuming", () => {
+  it("records when the pause began, and queues nothing", async () => {
+    // Local only. A pause has no meaning on its own — what it changes is the recorded
+    // duration, and that is decided once, at completion.
+    const next = await mutations.pauseSession(session());
+
+    expect(next.pausedAt).not.toBeNull();
+    expect(queue.enqueue).not.toHaveBeenCalled();
+    expect(store.saveSession).toHaveBeenCalledOnce();
+  });
+
+  it("does nothing when already paused", async () => {
+    const paused = session({ pausedAt: "2026-08-24T18:10:00.000Z" });
+    expect(await mutations.pauseSession(paused)).toBe(paused);
+    expect(store.saveSession).not.toHaveBeenCalled();
+  });
+
+  it("banks the pause on resume", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-24T18:10:00.000Z"));
+    const next = await mutations.resumeSession(
+      session({ pausedAt: "2026-08-24T18:05:00.000Z" }),
+    );
+    vi.useRealTimers();
+
+    expect(next.pausedSeconds).toBe(300);
+    expect(next.pausedAt).toBeNull();
+  });
+
+  it("adds a second pause to the first rather than replacing it", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-24T18:10:00.000Z"));
+    const next = await mutations.resumeSession(
+      session({ pausedSeconds: 120, pausedAt: "2026-08-24T18:05:00.000Z" }),
+    );
+    vi.useRealTimers();
+
+    expect(next.pausedSeconds).toBe(420);
+  });
+
+  it("does nothing when not paused", async () => {
+    const running = session();
+    expect(await mutations.resumeSession(running)).toBe(running);
+  });
+
+  it("sends the banked time with the completion", async () => {
+    await mutations.completeSession(session({ pausedSeconds: 600 }));
+
+    const payload = queue.enqueue.mock.calls.at(-1)?.[1] as { pausedSeconds: number };
+    expect(payload.pausedSeconds).toBe(600);
+  });
+
+  it("closes an open pause when the workout is finished from the paused state", async () => {
+    // Otherwise the time between pausing and tapping finish counts as training.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-24T18:10:00.000Z"));
+    await mutations.completeSession(session({ pausedAt: "2026-08-24T18:05:00.000Z" }));
+    vi.useRealTimers();
+
+    const payload = queue.enqueue.mock.calls.at(-1)?.[1] as { pausedSeconds: number };
+    expect(payload.pausedSeconds).toBe(300);
+  });
+
+  it("sends zero for a workout that was never paused", async () => {
+    await mutations.completeSession(session());
+
+    const payload = queue.enqueue.mock.calls.at(-1)?.[1] as { pausedSeconds: number };
+    expect(payload.pausedSeconds).toBe(0);
   });
 });

@@ -70,6 +70,67 @@ export async function addExercise(
   return next;
 }
 
+/**
+ * Take an exercise back out of the session.
+ *
+ * Always queued, even when nothing under it was ever completed. The `exercise.add` went
+ * up the moment it was chosen — the server has the entry whether or not it has any sets
+ * — so skipping the removal would leave an empty exercise in the user's history that
+ * they explicitly took out.
+ */
+export async function removeExercise(
+  session: LocalSession,
+  exerciseId: string,
+): Promise<LocalSession> {
+  const next: LocalSession = {
+    ...session,
+    exercises: session.exercises
+      .filter((exercise) => exercise.id !== exerciseId)
+      // Renumber so positions stay 0..n-1 and a later reorder is describing the same
+      // list the server holds.
+      .map((exercise, index) => ({ ...exercise, position: index })),
+  };
+
+  await saveSession(next);
+  await enqueue("exercise.remove", { id: exerciseId, sessionId: session.id });
+  return next;
+}
+
+/**
+ * Move an exercise up or down.
+ *
+ * Queued as the full resulting order rather than "this one, up one place". A move only
+ * means something against the list the client had when it was made; replayed later it
+ * moves the wrong exercise. An absolute order is a statement about the end state, so it
+ * survives being applied twice or out of step with the rest of the batch.
+ */
+export async function moveExercise(
+  session: LocalSession,
+  exerciseId: string,
+  direction: -1 | 1,
+): Promise<LocalSession> {
+  const from = session.exercises.findIndex((exercise) => exercise.id === exerciseId);
+  const to = from + direction;
+  if (from === -1 || to < 0 || to >= session.exercises.length) return session;
+
+  const exercises = [...session.exercises];
+  const [moved] = exercises.splice(from, 1);
+  if (!moved) return session;
+  exercises.splice(to, 0, moved);
+
+  const next: LocalSession = {
+    ...session,
+    exercises: exercises.map((exercise, index) => ({ ...exercise, position: index })),
+  };
+
+  await saveSession(next);
+  await enqueue("exercise.order", {
+    sessionId: session.id,
+    exerciseIds: next.exercises.map((exercise) => exercise.id),
+  });
+  return next;
+}
+
 export async function addSet(
   session: LocalSession,
   exerciseId: string,
@@ -234,12 +295,49 @@ export async function updateNotes(
   return next;
 }
 
+/**
+ * Stop the clock.
+ *
+ * Local only — nothing is queued. The server is told once, at completion, because a
+ * pause has no meaning on its own: what it changes is the recorded duration, and that is
+ * decided when the workout ends. Queuing every pause and resume would put a stream of
+ * operations on the wire to describe a number that can be sent as one.
+ */
+export async function pauseSession(session: LocalSession): Promise<LocalSession> {
+  if (session.pausedAt) return session;
+
+  const next: LocalSession = { ...session, pausedAt: new Date().toISOString() };
+  await saveSession(next);
+  return next;
+}
+
+export async function resumeSession(session: LocalSession): Promise<LocalSession> {
+  if (!session.pausedAt) return session;
+
+  const paused = (Date.now() - Date.parse(session.pausedAt)) / 1000;
+  const next: LocalSession = {
+    ...session,
+    // Banked on resume rather than recomputed at the end, so several pauses in one
+    // session add up instead of the last one winning.
+    pausedSeconds: (session.pausedSeconds ?? 0) + Math.max(0, Math.floor(paused)),
+    pausedAt: null,
+  };
+  await saveSession(next);
+  return next;
+}
+
 export async function completeSession(session: LocalSession): Promise<LocalSession> {
+  // Finishing while paused ends the pause: the time up to now was still not training.
+  const settled = session.pausedAt ? await resumeSession(session) : session;
   const completedAt = new Date().toISOString();
-  const next = { ...session, completedAt };
+  const next = { ...settled, completedAt };
 
   await saveSession(next, "local");
-  await enqueue("session.complete", { id: session.id, completedAt });
+  await enqueue("session.complete", {
+    id: session.id,
+    completedAt,
+    pausedSeconds: next.pausedSeconds ?? 0,
+  });
   return next;
 }
 

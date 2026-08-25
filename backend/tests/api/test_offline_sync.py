@@ -423,3 +423,190 @@ class TestSyncSafety:
     async def test_sync_requires_authentication(self, client: AsyncClient) -> None:
         response = await client.post("/v1/workouts/sessions/sync", json={"operations": []})
         assert response.status_code == 401
+
+
+class TestRemovingAndReorderingOffline:
+    """Adding the wrong exercise, and putting the list back in the right order.
+
+    Both were reachable online long before they were syncable, which meant the phone
+    could not queue them: a user who added squats by mistake in a basement gym had no way
+    to take them out again until they had signal.
+    """
+
+    @pytest.fixture
+    async def squat_id(self, client: AsyncClient, headers: dict[str, str]) -> str:
+        return await exercise_id_for(client, headers, "Back Squat")
+
+    async def test_an_exercise_added_by_mistake_can_be_removed_offline(
+        self, client: AsyncClient, headers: dict[str, str], bench_id: str
+    ) -> None:
+        session_id, entry_id = str(uuid4()), str(uuid4())
+        body = await flush(
+            client,
+            headers,
+            [
+                op("session.create", {"id": session_id, "name": "Push"}),
+                op(
+                    "exercise.add",
+                    {"id": entry_id, "sessionId": session_id, "exerciseId": bench_id},
+                ),
+                op("exercise.remove", {"id": entry_id, "sessionId": session_id}),
+            ],
+        )
+        assert [r["status"] for r in body["results"]] == ["applied"] * 3
+
+        session = await client.get(f"/v1/workouts/sessions/{session_id}", headers=headers)
+        assert session.json()["exercises"] == []
+
+    async def test_reorder_carries_the_whole_order_not_a_move(
+        self, client: AsyncClient, headers: dict[str, str], bench_id: str, squat_id: str
+    ) -> None:
+        session_id = str(uuid4())
+        first, second = str(uuid4()), str(uuid4())
+        await flush(
+            client,
+            headers,
+            [
+                op("session.create", {"id": session_id, "name": "Full body"}),
+                op("exercise.add", {"id": first, "sessionId": session_id, "exerciseId": bench_id}),
+                op("exercise.add", {"id": second, "sessionId": session_id, "exerciseId": squat_id}),
+                op("exercise.order", {"sessionId": session_id, "exerciseIds": [second, first]}),
+            ],
+        )
+
+        session = await client.get(f"/v1/workouts/sessions/{session_id}", headers=headers)
+        assert [e["id"] for e in session.json()["exercises"]] == [second, first]
+
+    async def test_replaying_a_reorder_lands_on_the_same_order(
+        self, client: AsyncClient, headers: dict[str, str], bench_id: str, squat_id: str
+    ) -> None:
+        # The reason the operation carries the full order. A "move up one" replayed after
+        # the first application would move the wrong exercise; an absolute order is a
+        # statement about the end state, so applying it twice changes nothing.
+        session_id = str(uuid4())
+        first, second = str(uuid4()), str(uuid4())
+        await flush(
+            client,
+            headers,
+            [
+                op("session.create", {"id": session_id, "name": "Full body"}),
+                op("exercise.add", {"id": first, "sessionId": session_id, "exerciseId": bench_id}),
+                op("exercise.add", {"id": second, "sessionId": session_id, "exerciseId": squat_id}),
+            ],
+        )
+        order = op("exercise.order", {"sessionId": session_id, "exerciseIds": [second, first]})
+
+        # A distinct opId, so the sync log's idempotency is not what is being tested here
+        # — the operation's own shape is.
+        await flush(client, headers, [order])
+        again = dict(order, opId=str(uuid4()))
+        body = await flush(client, headers, [again])
+
+        assert body["results"][0]["status"] == "applied"
+        session = await client.get(f"/v1/workouts/sessions/{session_id}", headers=headers)
+        assert [e["id"] for e in session.json()["exercises"]] == [second, first]
+
+    async def test_a_partial_order_is_rejected_rather_than_dropping_exercises(
+        self, client: AsyncClient, headers: dict[str, str], bench_id: str, squat_id: str
+    ) -> None:
+        session_id = str(uuid4())
+        first, second = str(uuid4()), str(uuid4())
+        await flush(
+            client,
+            headers,
+            [
+                op("session.create", {"id": session_id, "name": "Full body"}),
+                op("exercise.add", {"id": first, "sessionId": session_id, "exerciseId": bench_id}),
+                op("exercise.add", {"id": second, "sessionId": session_id, "exerciseId": squat_id}),
+            ],
+        )
+        body = await flush(
+            client,
+            headers,
+            [op("exercise.order", {"sessionId": session_id, "exerciseIds": [first]})],
+        )
+        assert body["results"][0]["status"] == "rejected"
+
+        session = await client.get(f"/v1/workouts/sessions/{session_id}", headers=headers)
+        assert len(session.json()["exercises"]) == 2
+
+    async def test_a_reorder_without_ids_is_rejected_not_a_server_error(
+        self, client: AsyncClient, headers: dict[str, str]
+    ) -> None:
+        body = await flush(client, headers, [op("exercise.order", {"sessionId": str(uuid4())})])
+        result = body["results"][0]
+        assert result["status"] == "rejected"
+        assert "exerciseIds" in result["reason"]
+
+
+class TestPausedTimeSurvivesTheQueue:
+    """A pause happens offline, so the only place it can be reported is the flush."""
+
+    async def test_the_recorded_duration_excludes_paused_time(
+        self, client: AsyncClient, headers: dict[str, str], bench_id: str
+    ) -> None:
+        session_id, entry_id = str(uuid4()), str(uuid4())
+        started = datetime.now(UTC) - timedelta(minutes=60)
+
+        await flush(
+            client,
+            headers,
+            [
+                op("session.create", {"id": session_id, "name": "Interrupted"}, at=started),
+                op(
+                    "exercise.add",
+                    {"id": entry_id, "sessionId": session_id, "exerciseId": bench_id},
+                    at=started + timedelta(minutes=1),
+                ),
+                op(
+                    "set.log",
+                    {
+                        "id": str(uuid4()),
+                        "sessionId": session_id,
+                        "sessionExerciseId": entry_id,
+                        "setNumber": 1,
+                        "reps": 8,
+                        "weightKg": "80",
+                        "isCompleted": True,
+                    },
+                    at=started + timedelta(minutes=2),
+                ),
+                op(
+                    "session.complete",
+                    {
+                        "id": session_id,
+                        "completedAt": (started + timedelta(minutes=60)).isoformat(),
+                        "pausedSeconds": 15 * 60,
+                    },
+                ),
+            ],
+        )
+
+        session = await client.get(f"/v1/workouts/sessions/{session_id}", headers=headers)
+        assert session.json()["durationSeconds"] == 45 * 60
+
+    async def test_a_completion_without_a_pause_still_uses_wall_clock(
+        self, client: AsyncClient, headers: dict[str, str], bench_id: str
+    ) -> None:
+        # The field is additive: a client that predates it sends nothing and gets the
+        # behaviour it has always had.
+        session_id = str(uuid4())
+        started = datetime.now(UTC) - timedelta(minutes=30)
+
+        await flush(
+            client,
+            headers,
+            [
+                op("session.create", {"id": session_id, "name": "Straight through"}, at=started),
+                op(
+                    "session.complete",
+                    {
+                        "id": session_id,
+                        "completedAt": (started + timedelta(minutes=30)).isoformat(),
+                    },
+                ),
+            ],
+        )
+
+        session = await client.get(f"/v1/workouts/sessions/{session_id}", headers=headers)
+        assert session.json()["durationSeconds"] == 30 * 60

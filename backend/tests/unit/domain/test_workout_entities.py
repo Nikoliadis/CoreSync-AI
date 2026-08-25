@@ -79,6 +79,35 @@ class TestWorkoutSession:
         assert session.total_volume_kg == Decimal("1460")  # 800 + 660
         assert session.perceived_effort == 8
 
+    def test_paused_time_is_subtracted_from_the_recorded_duration(self) -> None:
+        # A phone call mid-session is not training. The duration the history shows is the
+        # time actually worked, so pausing has to change the stored number rather than
+        # only the timer on screen.
+        session = new_session()
+        session.complete(at=STARTED + timedelta(minutes=45), paused_seconds=10 * 60)
+
+        assert session.duration_seconds == 35 * 60
+
+    def test_a_pause_longer_than_the_session_clamps_to_zero(self) -> None:
+        # The value comes from a phone that may have slept or had its clock changed. A
+        # negative duration would violate `duration_positive` and fail the whole
+        # completion, losing the workout over a bad timer.
+        session = new_session()
+        session.complete(at=STARTED + timedelta(minutes=5), paused_seconds=60 * 60)
+
+        assert session.duration_seconds == 0
+
+    def test_negative_paused_time_is_refused(self) -> None:
+        session = new_session()
+        with pytest.raises(ValueError, match="negative"):
+            session.complete(at=STARTED + timedelta(minutes=45), paused_seconds=-1)
+
+    def test_completing_without_pausing_is_unchanged(self) -> None:
+        session = new_session()
+        session.complete(at=STARTED + timedelta(minutes=45))
+
+        assert session.duration_seconds == 45 * 60
+
     def test_warmups_are_excluded_from_session_totals(self) -> None:
         session = new_session()
         entry = session.add_exercise(exercise_id=EXERCISE)

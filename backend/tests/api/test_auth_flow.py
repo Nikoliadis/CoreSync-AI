@@ -494,7 +494,10 @@ class TestOAuthAgainstAnUnverifiedAccount:
             provider="google",
         )
 
-        response = await client.post("/v1/auth/oauth/google", json={"idToken": "a-token-long-enough-for-the-schema"})
+        response = await client.post(
+            "/v1/auth/oauth/google",
+            json={"idToken": "a-token-long-enough-for-the-schema"},
+        )
         assert "password" in response.json()["error"]["message"].lower()
 
     async def test_a_verified_account_still_links(
@@ -515,6 +518,9 @@ class TestOAuthAgainstAnUnverifiedAccount:
             provider="google",
         )
 
-        response = await client.post("/v1/auth/oauth/google", json={"idToken": "a-token-long-enough-for-the-schema"})
+        response = await client.post(
+            "/v1/auth/oauth/google",
+            json={"idToken": "a-token-long-enough-for-the-schema"},
+        )
         assert response.status_code == 200, response.text
         assert response.json()["accessToken"]

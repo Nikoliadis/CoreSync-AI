@@ -99,6 +99,40 @@ Tick each. Note anything that surprises you, however small.
 - [ ] **Every set is still there**, exactly as left
 - [ ] The exercise added while offline is still there
 
+### Previous performance and records
+
+These need a *second* workout to mean anything: the PREV column reads from completed
+sessions only, so on a first-ever session it is correctly empty.
+
+- [ ] Finish the workout above, then start a new one and add the same exercise
+- [ ] The **PREV** column shows what you lifted last time, per set number
+- [ ] It reads `80 × 8`, not the values you are currently typing
+- [ ] Tap **+ Sets** on a fresh exercise — weight and reps prefill from last session
+- [ ] Log a set clearly heavier than last time — a **trophy** appears on that row
+- [ ] Log a lighter set afterwards — the trophy stays on the best set, and appears once
+- [ ] Log a set clearly lighter than your best — no trophy
+- [ ] In airplane mode the PREV column is empty and nothing errors or spins
+
+### Reordering and removing
+
+- [ ] Add a second exercise
+- [ ] Tap the **down arrow** on the first — the two swap
+- [ ] The up arrow on the top exercise and the down arrow on the bottom are greyed out
+- [ ] Tap the **bin** on an exercise with no completed sets — it goes, no dialog
+- [ ] Tap the **bin** on one with completed sets — a confirmation names the set count
+- [ ] Cancel it — the exercise stays
+- [ ] Confirm it — the exercise goes
+- [ ] Do all of the above **in airplane mode**, then reconnect: the server agrees
+
+### The clock
+
+- [ ] The header shows elapsed time, counting up
+- [ ] Tap **pause** — the clock freezes and a "Paused" banner appears
+- [ ] Background the app for a minute, reopen — still paused, still frozen
+- [ ] Tap the banner — it resumes from where it stopped, not from where it would have been
+- [ ] Background the app while *running* for a minute, reopen — the clock caught up
+- [ ] Pause, wait, resume, pause again, resume — the time lost adds up across both
+
 ### Sync
 
 - [ ] **Turn airplane mode off**
@@ -119,6 +153,17 @@ GROUP BY s.id ORDER BY s.started_at DESC LIMIT 3;"
 - [ ] The session is there
 - [ ] Set count matches what you logged
 - [ ] Volume matches what the header showed
+
+```bash
+docker exec coresync-postgres-1 psql -U coresync -d coresync -c "
+SELECT name, duration_seconds,
+       EXTRACT(EPOCH FROM (completed_at - started_at))::int AS wall_clock
+FROM workout_sessions ORDER BY started_at DESC LIMIT 3;"
+```
+
+- [ ] For the paused session, `duration_seconds` is **less than** `wall_clock`, by
+      roughly the time you spent paused
+- [ ] For a session you never paused, the two match
 
 ```bash
 docker exec coresync-postgres-1 psql -U coresync -d coresync -c "

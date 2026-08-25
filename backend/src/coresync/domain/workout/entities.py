@@ -472,13 +472,29 @@ class WorkoutSession:
             Decimal("0.01"), rounding=ROUND_HALF_UP
         )
 
-    def complete(self, *, at: datetime, perceived_effort: int | None = None) -> None:
+    def complete(
+        self, *, at: datetime, perceived_effort: int | None = None, paused_seconds: int = 0
+    ) -> None:
+        """Finish the workout.
+
+        ``paused_seconds`` is time the user explicitly stopped the clock for — a phone
+        call, a queue for the rack. It is subtracted from the wall-clock elapsed time so
+        the recorded duration is time actually training, which is the number the history
+        and the dashboard present as one.
+
+        Clamped at zero rather than trusted: the value comes from a phone that may have
+        been asleep, and a negative duration would violate the ``duration_positive``
+        constraint and fail the whole completion.
+        """
         if self.status is not SessionStatus.IN_PROGRESS:
             raise ValueError(f"session is already {self.status.value}")
         if at < self.started_at:
             raise ValueError("a session cannot finish before it started")
+        if paused_seconds < 0:
+            raise ValueError("paused time cannot be negative")
         self.completed_at = at
-        self.duration_seconds = int((at - self.started_at).total_seconds())
+        elapsed = int((at - self.started_at).total_seconds())
+        self.duration_seconds = max(0, elapsed - paused_seconds)
         self.status = SessionStatus.COMPLETED
         if perceived_effort is not None:
             self.perceived_effort = perceived_effort

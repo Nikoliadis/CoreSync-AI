@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   completedSetCount,
+  elapsedSeconds,
+  formatElapsed,
   lastCompletedSet,
   newExercise,
   newSession,
   newSet,
   sessionVolume,
   type LocalExercise,
+  type LocalSession,
   type LocalSet,
 } from "./session-model";
 
@@ -112,5 +115,59 @@ describe("ids", () => {
       newSet({ sessionExerciseId: "ex", setNumber: 1 }).id,
     ]);
     expect(ids.size).toBe(3);
+  });
+});
+
+describe("the session clock", () => {
+  function at(minutes: number): string {
+    return new Date(Date.UTC(2026, 7, 25, 18, minutes, 0)).toISOString();
+  }
+  const now = Date.UTC(2026, 7, 25, 18, 45, 0);
+
+  function running(overrides: Partial<LocalSession> = {}): LocalSession {
+    return { ...newSession({ name: "Push" }), startedAt: at(0), ...overrides };
+  }
+
+  it("counts wall-clock time when nothing was paused", () => {
+    expect(elapsedSeconds(running(), now)).toBe(45 * 60);
+  });
+
+  it("subtracts time already banked from earlier pauses", () => {
+    expect(elapsedSeconds(running({ pausedSeconds: 10 * 60 }), now)).toBe(35 * 60);
+  });
+
+  it("freezes while a pause is still open", () => {
+    // Paused at 18:30, read at 18:45: the clock shows 30 minutes, not 45.
+    expect(elapsedSeconds(running({ pausedAt: at(30) }), now)).toBe(30 * 60);
+  });
+
+  it("adds up several pauses", () => {
+    const session = running({ pausedSeconds: 5 * 60, pausedAt: at(40) });
+    expect(elapsedSeconds(session, now)).toBe(35 * 60);
+  });
+
+  it("stops at completion rather than running forever", () => {
+    const session = running({ completedAt: at(40) });
+    expect(elapsedSeconds(session, now)).toBe(40 * 60);
+  });
+
+  it("survives a session stored before pausing existed", () => {
+    // Sitting mid-workout in SQLite when the app updated. `NaN` on the header would be
+    // the first thing that user saw.
+    const legacy: Partial<LocalSession> = { ...running() };
+    delete legacy.pausedSeconds;
+    delete legacy.pausedAt;
+
+    expect(elapsedSeconds(legacy as LocalSession, now)).toBe(45 * 60);
+  });
+
+  it("never goes negative on a phone whose clock moved", () => {
+    expect(elapsedSeconds(running({ pausedSeconds: 60 * 60 }), now)).toBe(0);
+  });
+
+  it("formats below and above an hour", () => {
+    expect(formatElapsed(4 * 60 + 12)).toBe("4:12");
+    expect(formatElapsed(3600 + 4 * 60 + 12)).toBe("1:04:12");
+    expect(formatElapsed(0)).toBe("0:00");
   });
 });

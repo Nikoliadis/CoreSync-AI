@@ -42,6 +42,10 @@ export type LocalSession = {
   completedAt: string | null;
   notes: string | null;
   exercises: LocalExercise[];
+  /** Seconds already banked from earlier pauses. */
+  pausedSeconds: number;
+  /** When the current pause began, or null while the clock is running. */
+  pausedAt: string | null;
 };
 
 
@@ -60,6 +64,8 @@ export function newSession(input: {
     completedAt: null,
     notes: null,
     exercises: [],
+    pausedSeconds: 0,
+    pausedAt: null,
   };
 }
 
@@ -140,4 +146,37 @@ export function lastCompletedSet(exercise: LocalExercise): LocalSet | null {
     if (set?.isCompleted) return set;
   }
   return exercise.sets[exercise.sets.length - 1] ?? null;
+}
+
+// ------------------------------------------------------------------- the clock
+/**
+ * Seconds actually spent training, paused time excluded.
+ *
+ * Derived rather than ticked. A counter incremented once a second is wrong the moment
+ * the app is backgrounded — which on a phone in a gym is most of the session — whereas
+ * two timestamps and a subtraction are right however long it was asleep.
+ *
+ * Defaults on the pause fields because a session started before they existed is still
+ * sitting in SQLite, mid-workout, and must not come back as `NaN`.
+ */
+export function elapsedSeconds(session: LocalSession, now: number = Date.now()): number {
+  const started = Date.parse(session.startedAt);
+  if (!Number.isFinite(started)) return 0;
+
+  const end = session.completedAt ? Date.parse(session.completedAt) : now;
+  const banked = session.pausedSeconds ?? 0;
+  // Time inside the pause that is still running has not been banked yet.
+  const current = session.pausedAt ? (end - Date.parse(session.pausedAt)) / 1000 : 0;
+
+  return Math.max(0, Math.floor((end - started) / 1000 - banked - current));
+}
+
+/** `1:04:12` past the hour, `4:12` below it — the leading zero earns nothing. */
+export function formatElapsed(seconds: number): string {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  const pad = (value: number) => String(value).padStart(2, "0");
+
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(secs)}` : `${minutes}:${pad(secs)}`;
 }
