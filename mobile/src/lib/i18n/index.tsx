@@ -16,10 +16,11 @@
  * would be the worse outcome.
  */
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { getLocales } from "expo-localization";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import { storage } from "@/lib/storage";
+
 import { en } from "./en";
 
 export type Locale = "en" | "el";

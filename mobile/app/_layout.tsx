@@ -11,8 +11,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { createQueryClient } from "@/lib/api/query-client";
 import { tokenStore } from "@/lib/api/client";
+import { createQueryClient } from "@/lib/api/query-client";
 import { I18nProvider } from "@/lib/i18n";
 import { storage } from "@/lib/storage";
 import { openDatabase } from "@/offline/database";
@@ -33,14 +33,22 @@ export default function RootLayout() {
   const logout = useAuth((state) => state.logout);
 
   useEffect(() => {
-    (async () => {
-      // Order matters: preferences before the first paint so the theme is right, the
-      // database before the sync engine so there is a queue to drain.
-      await storage.hydrate(PERSISTED_KEYS);
-      await openDatabase();
-      await restore();
-      setReady(true);
-      await SplashScreen.hideAsync();
+    void (async () => {
+      try {
+        // Order matters: preferences before the first paint so the theme is right, the
+        // database before the sync engine so there is a queue to drain.
+        await storage.hydrate(PERSISTED_KEYS);
+        await openDatabase();
+        await restore();
+      } catch (error) {
+        // Whatever failed, the app must still start. A corrupt database or an
+        // unreachable keystore is a bad session, not a reason to hold the splash screen
+        // forever — which is exactly what an unhandled rejection here would do.
+        console.warn("startup failed, continuing unauthenticated", error);
+      } finally {
+        setReady(true);
+        await SplashScreen.hideAsync();
+      }
     })();
   }, [restore]);
 

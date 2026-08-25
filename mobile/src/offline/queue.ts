@@ -12,8 +12,9 @@
  * duplicate set.
  */
 
-import { openDatabase } from "./database";
 import { uuid7 } from "@/lib/utils/uuid7";
+
+import { openDatabase } from "./database";
 
 /**
  * Exactly the operations `SyncWorkoutsUseCase._HANDLERS` dispatches on.

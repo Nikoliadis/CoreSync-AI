@@ -3,6 +3,7 @@
 import { Bell, Search } from "lucide-react";
 import Link from "next/link";
 
+import { AccountMenu } from "@/components/layout/account-menu";
 import { Logo } from "@/components/layout/logo";
 import { SyncIndicator } from "@/components/layout/sync-indicator";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
@@ -48,6 +49,7 @@ export function TopBar({ title, action }: { title?: string; action?: React.React
         </Link>
 
         <ThemeToggle className="hidden sm:inline-flex" />
+        <AccountMenu />
       </div>
     </header>
   );

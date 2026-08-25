@@ -13,6 +13,7 @@
  */
 
 import { openDatabase, type SyncState } from "@/offline/database";
+
 import type { LocalSession } from "./session-model";
 
 // Re-exported so callers have one import for "the workout", model and storage alike.

@@ -141,6 +141,29 @@ class ProviderEmailUnverifiedError(ForbiddenError):
     )
 
 
+class UnverifiedAccountExistsError(ConflictError):
+    """A local account already holds this address, and its email was never verified.
+
+    docs/06 permits auto-linking only when *both* sides assert a verified address, and
+    this is the case it does not cover: the provider verified the address, but the
+    account sitting on it did not. Linking anyway is the pre-hijacking attack — register
+    an account with somebody's address, leave it unverified, prepare it, and wait for
+    them to sign in through the provider and inherit what you left there.
+
+    So it is refused. Unlike most refusals this one names the reason, and can: reaching
+    it requires a provider-signed token for that exact address, so the caller has already
+    proved they control it. Telling somebody an account exists on their own email leaks
+    nothing they could not confirm by trying to register.
+    """
+
+    code = "unverified_account_exists"
+    user_message = (
+        "An account with this email already exists but was never verified. "
+        "Sign in with your password to finish setting it up, then link your provider "
+        "from settings."
+    )
+
+
 class WeakPasswordError(ValidationError):
     code = "weak_password"
     user_message = "Choose a stronger password."

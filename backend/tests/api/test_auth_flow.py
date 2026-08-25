@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 
+from coresync.application.common.ports import OidcIdentity
 from tests.api.conftest import DEFAULT_PASSWORD, auth_header, register_and_verify
 from tests.fakes import CapturingEmailSender, FakeOidcVerifier
 
@@ -413,3 +414,107 @@ class TestOAuth:
         )
         if response.status_code == 200:
             assert response.json()["user"]["id"] != victim_id
+
+
+class TestOAuthAgainstAnUnverifiedAccount:
+    """The branch docs/06 does not cover, and which used to return a 500.
+
+    Auto-linking requires *both* sides to assert a verified address. When the provider
+    verifies but the local account never did, linking is refused — that is the
+    pre-hijacking attack, where somebody registers an account on your address, leaves it
+    unverified, prepares it, and waits for you to sign in through Google and inherit it.
+
+    Refusing was already correct. Falling through to `register` afterwards was not: the
+    insert hit `uq_users_email_active` and the user saw a 500 with nothing actionable.
+    """
+
+    async def test_it_is_a_handled_conflict_not_a_crash(
+        self,
+        client: AsyncClient,
+        email_sender: CapturingEmailSender,
+        google_verifier: FakeOidcVerifier,
+    ) -> None:
+        email = "collides@example.com"
+        registered = await client.post(
+            "/v1/auth/register",
+            json={
+                "email": email,
+                "password": DEFAULT_PASSWORD,
+                "displayName": "Never Verified",
+                "timezone": "Europe/Athens",
+                "acceptedTerms": True,
+            },
+        )
+        assert registered.status_code == 201, registered.text
+        # Deliberately not verifying — that is the whole condition under test.
+
+        google_verifier.identity = OidcIdentity(
+            subject="google-collision-subject",
+            email=email,
+            email_verified=True,
+            name="Google User",
+            provider="google",
+        )
+
+        response = await client.post(
+            "/v1/auth/oauth/google", json={"idToken": "any-token-the-fake-accepts"}
+        )
+
+        assert response.status_code == 409, response.text
+        assert response.json()["error"]["code"] == "unverified_account_exists"
+
+    async def test_the_message_says_what_to_do(
+        self,
+        client: AsyncClient,
+        email_sender: CapturingEmailSender,
+        google_verifier: FakeOidcVerifier,
+    ) -> None:
+        """Naming the reason is safe here and nowhere else in the auth flow.
+
+        Reaching this branch requires a provider-signed token for that exact address, so
+        the caller has already proved they control it. Telling them an account exists on
+        their own email leaks nothing.
+        """
+        email = "guidance@example.com"
+        await client.post(
+            "/v1/auth/register",
+            json={
+                "email": email,
+                "password": DEFAULT_PASSWORD,
+                "displayName": "Never Verified",
+                "timezone": "Europe/Athens",
+                "acceptedTerms": True,
+            },
+        )
+        google_verifier.identity = OidcIdentity(
+            subject="google-guidance-subject",
+            email=email,
+            email_verified=True,
+            name="Google User",
+            provider="google",
+        )
+
+        response = await client.post("/v1/auth/oauth/google", json={"idToken": "a-token-long-enough-for-the-schema"})
+        assert "password" in response.json()["error"]["message"].lower()
+
+    async def test_a_verified_account_still_links(
+        self,
+        client: AsyncClient,
+        email_sender: CapturingEmailSender,
+        google_verifier: FakeOidcVerifier,
+    ) -> None:
+        """The happy path this fix must not have broken."""
+        email = "verified@example.com"
+        await register_and_verify(client, email_sender, email=email)
+
+        google_verifier.identity = OidcIdentity(
+            subject="google-verified-subject",
+            email=email,
+            email_verified=True,
+            name="Google User",
+            provider="google",
+        )
+
+        response = await client.post("/v1/auth/oauth/google", json={"idToken": "a-token-long-enough-for-the-schema"})
+        assert response.status_code == 200, response.text
+        assert response.json()["accessToken"]

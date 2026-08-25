@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...but the template must be committed, or a fresh clone has no way to know which
+# variables exist. `.env*` is Next.js's default and swallows it.
+!.env.example
 
 # vercel
 .vercel

@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { X } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, FlatList, Pressable, StyleSheet, View } from "react-native";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Screen } from "@/components/ui/screen";
 import { Text } from "@/components/ui/text";
+import { usePickedExercise } from "@/features/exercises/picked-exercise";
 import { SetRow } from "@/features/workouts/components/set-row";
 import {
   completedSetCount,
@@ -51,22 +52,35 @@ export default function ActiveWorkoutScreen() {
   const theme = useTheme();
   const router = useRouter();
   const rest = useRestTimer();
+  const consumePicked = usePickedExercise((state) => state.consume);
 
   const [session, setSession] = useState<LocalSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      // Recovery is not a feature here, it is the default. The session was never held
-      // in memory alone, so an app killed between sets comes back where it was.
-      const existing = await getActiveSession();
-      setSession(existing?.session ?? (await startSession(newSession({ name: "Workout" }))));
-      setLoading(false);
+    void (async () => {
+      try {
+        // Recovery is not a feature here, it is the default. The session was never held
+        // in memory alone, so an app killed between sets comes back where it was.
+        const existing = await getActiveSession();
+        setSession(
+          existing?.session ?? (await startSession(newSession({ name: "Workout" }))),
+        );
+      } catch (error) {
+        // Leaving `session` null renders the error state rather than a spinner that
+        // never resolves. An unhandled rejection here would strand the user on
+        // "Loading" with no way out but force-quitting.
+        console.warn("could not open a workout", error);
+        setFailed(true);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
   const apply = useCallback(
-    async (operation: (current: LocalSession) => Promise<LocalSession>) => {
+    (operation: (current: LocalSession) => Promise<LocalSession>) => {
       setSession((current) => {
         if (!current) return current;
         // Optimistic by construction: the mutation has already persisted before the
@@ -76,6 +90,22 @@ export default function ActiveWorkoutScreen() {
       });
     },
     [],
+  );
+
+  // The picker hands its choice back through a one-slot store and this consumes it on
+  // focus. `consume` clears as it reads, so returning to this screen for any other
+  // reason cannot re-apply the last pick.
+  useFocusEffect(
+    useCallback(() => {
+      const picked = consumePicked();
+      if (!picked) return;
+      void apply((current) =>
+        addExercise(current, {
+          exerciseId: picked.id,
+          exerciseName: picked.name,
+        }),
+      );
+    }, [apply, consumePicked]),
   );
 
   const onToggle = useCallback(
@@ -125,11 +155,25 @@ export default function ActiveWorkoutScreen() {
     );
   }, [router, session, t]);
 
-  if (loading || !session) {
+  if (loading) {
     return (
       <Screen edges={["top", "bottom"]}>
         <View style={styles.centre}>
           <Text tone="muted">{t("common.loading")}</Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  if (failed || !session) {
+    return (
+      <Screen edges={["top", "bottom"]}>
+        <View style={styles.centre}>
+          <Text tone="secondary">{t("common.errorTitle")}</Text>
+          <Text variant="caption" tone="muted">
+            {t("common.errorBody")}
+          </Text>
+          <Button label={t("common.cancel")} variant="ghost" onPress={() => router.back()} />
         </View>
       </Screen>
     );
@@ -265,15 +309,7 @@ export default function ActiveWorkoutScreen() {
           label={t("workouts.addExercise")}
           variant="secondary"
           style={styles.grow}
-          onPress={() =>
-            // Placeholder until the picker screen lands; keeps the flow exercisable.
-            void apply((current) =>
-              addExercise(current, {
-                exerciseId: "00000000-0000-7000-8000-000000000000",
-                exerciseName: "Exercise",
-              }),
-            )
-          }
+          onPress={() => router.push("/workout/exercise-picker")}
         />
         <Pressable
           onPress={onCancel}

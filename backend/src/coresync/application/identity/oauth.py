@@ -21,6 +21,7 @@ from coresync.core.errors import (
     LastAuthMethodError,
     NotFoundError,
     ProviderEmailUnverifiedError,
+    UnverifiedAccountExistsError,
 )
 from coresync.core.logging import get_logger
 from coresync.domain.identity.entities import AuthIdentity, AuthProvider, User
@@ -103,6 +104,15 @@ class OAuthSignInUseCase:
                         # uq_users_email_active and 500s. Refused either way, so the
                         # response cannot be used to probe which addresses exist.
                         raise ProviderEmailUnverifiedError
+
+                    # The provider verified the address, but `_maybe_find_linkable_user`
+                    # declined to link — which means an account holds this email and its
+                    # own address was never verified. Falling through to `register` here
+                    # is what produced a 500 on `uq_users_email_active`: the constraint
+                    # caught it, but only after the request had already failed.
+                    if await self._uow.users.get_by_email(identity.email) is not None:
+                        raise UnverifiedAccountExistsError
+
                     user = User.register(
                         email=identity.email,
                         password_hash=None,  # social-only account

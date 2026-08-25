@@ -16,6 +16,7 @@
  */
 
 import { enqueue } from "@/offline/queue";
+
 import { saveSession } from "./local-store";
 import {
   type LocalExercise,

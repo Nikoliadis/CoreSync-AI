@@ -3,8 +3,9 @@ import { memo, useEffect, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
 import { Text } from "@/components/ui/text";
-import { type LocalSet } from "../local-store";
 import { HIT_SIZE, radius, space, type, useTheme } from "@/theme";
+
+import { type LocalSet } from "../local-store";
 
 type Props = {
   set: LocalSet;

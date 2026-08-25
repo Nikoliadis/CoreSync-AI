@@ -1,0 +1,77 @@
+name: Mobile CI
+
+# Scoped to the Expo app so a backend-only change does not spend CI minutes here, and to
+# the workflow itself so a change to these steps is exercised by the change that makes it.
+on:
+  pull_request:
+    paths: ["mobile/**", ".github/workflows/mobile-ci.yml"]
+  push:
+    branches: [main]
+    paths: ["mobile/**", ".github/workflows/mobile-ci.yml"]
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  WORKING_DIR: mobile
+  NODE_VERSION: "22"
+
+jobs:
+  quality:
+    name: Lint, types & tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      # `ci` rather than `install`: it installs exactly the lockfile and fails if
+      # package.json and the lock have drifted, which is the point of committing one.
+      - run: npm ci
+
+      # Type-aware, so this is where a floating promise is caught. Every write in the
+      # offline path is async and an unawaited one is a set that never reaches SQLite —
+      # the user finds out days later, when their history has a hole in it.
+      - name: ESLint
+        run: npx eslint .
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npx vitest run
+
+  bundle:
+    name: Android & iOS bundles
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - run: npm ci
+
+      # `expo export` runs Metro over the whole app for real. It catches what tsc cannot:
+      # a native module that fails to resolve, a bad asset reference, a plugin that only
+      # breaks at bundle time. Both platforms, because their resolution differs.
+      #
+      # Not a full EAS build — that needs Xcode and the Android SDK, and belongs in a
+      # release workflow rather than on every push.
+      - name: Android bundle
+        run: npx expo export --platform android --output-dir /tmp/expo-android
+
+      - name: iOS bundle
+        run: npx expo export --platform ios --output-dir /tmp/expo-ios

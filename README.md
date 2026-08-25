@@ -28,6 +28,11 @@ form `coresync` is used — Python package `coresync`, database `coresync`, API 
 The product as designed. The **Built** column is what exists today — the status block
 above is the short version.
 
+Note that the MVP cut in [docs/01 §4](docs/01-product-and-scope.md) and the phase plan in
+[docs/15](docs/15-roadmap.md) disagree in places, and delivery has followed the roadmap.
+Barcode scanning and recipes are listed as out of MVP and are both built, because Phase 3
+includes them. Social is the one exclusion that has held.
+
 | Pillar | Comparable to | What CoreSync does | Built |
 |---|---|---|---|
 | Workout tracking | Strong, Hevy | Routines, live session logging, supersets, drop sets, rest timer, PR detection, history | ✅ |
@@ -35,7 +40,7 @@ above is the short version.
 | AI coach | — | Context-aware chat, weekly reports, tool calling over the user's own data | ✅ chat and reports; no photo analysis |
 | Achievements | — | Definitions, evaluation, streaks | ✅ |
 | Adaptive training | Fitbod | Recovery-aware workout generation, progressive overload, plateau detection | ❌ |
-| Social | Strava-lite | Follows, likes, challenges, leaderboards | ❌ out of MVP by design |
+| Social | Strava-lite | Follows, likes, challenges, leaderboards | ❌ not started |
 
 ## Documentation map
 

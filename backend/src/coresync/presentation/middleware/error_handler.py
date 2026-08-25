@@ -72,7 +72,17 @@ def register_exception_handlers(app: FastAPI) -> None:
         if status_code >= 500:
             logger.exception("unhandled_app_error", error_code=exc.code, **exc.context)
         elif status_code in (401, 403, 429):
-            logger.warning("request_denied", error_code=exc.code, path=request.url.path)
+            # The developer-facing reason, not just the code. Without it every rejected
+            # sign-in looks identical in the log — "nonce mismatch", "expired", "wrong
+            # audience" and "unknown issuer" all read as `invalid_token`, and the one
+            # thing an operator needs is which. `str(exc)` is the internal message; the
+            # user still sees only `user_message`, and no token is ever logged.
+            logger.warning(
+                "request_denied",
+                error_code=exc.code,
+                path=request.url.path,
+                reason=str(exc),
+            )
 
         headers: dict[str, str] = {}
         if isinstance(exc, RateLimitedError):
