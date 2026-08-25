@@ -21,6 +21,7 @@ import {
   exercisesApi,
   primaryMuscle,
 } from "@/features/exercises/api";
+import { ExerciseThumbnailButton } from "@/features/exercises/components/exercise-media";
 import { usePickedExercise } from "@/features/exercises/picked-exercise";
 import { useExerciseSearch } from "@/features/exercises/use-exercise-search";
 import { useTranslate } from "@/lib/i18n";
@@ -201,6 +202,7 @@ function ExerciseRow({
   onPress: () => void;
 }) {
   const theme = useTheme();
+  const router = useRouter();
   const muscle = primaryMuscle(exercise);
   const equipment = equipmentLabel(exercise);
   const detail = [muscle, equipment].filter(Boolean).join(" · ");
@@ -215,6 +217,14 @@ function ExerciseRow({
         { borderBottomColor: theme.border, opacity: pressed ? 0.6 : 1 },
       ]}
     >
+      <ExerciseThumbnailButton
+        media={exercise.media}
+        name={exercise.name}
+        // Tapping the picture asks "how is this done"; tapping the row says "I am doing
+        // this one". Two different intentions, so two different targets.
+        onPress={() => router.push(`/exercise/${exercise.id}`)}
+      />
+
       <View style={styles.rowText}>
         <View style={styles.rowTitle}>
           <Text numberOfLines={1} style={styles.name}>
@@ -309,7 +319,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: space.md,
-    minHeight: 60,
+    minHeight: 64,
     paddingHorizontal: space.lg,
     paddingVertical: space.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,

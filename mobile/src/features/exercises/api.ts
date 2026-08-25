@@ -18,6 +18,13 @@ export type MuscleRef = {
   contributionPct: number | null;
 };
 
+export type ExerciseMedia = {
+  id: string;
+  /** `image` | `video` | `animation` — the server's vocabulary. */
+  mediaType: "image" | "video" | "animation";
+  url: string;
+};
+
 export type Exercise = {
   id: string;
   slug: string;
@@ -33,6 +40,16 @@ export type Exercise = {
   isFavorite: boolean;
   muscles: MuscleRef[];
   equipment: string[];
+  /**
+   * Demonstration media, in the order it should be shown.
+   *
+   * Optional because the list endpoint has always carried the field and the catalogue
+   * may hold none — an exercise with no media is the normal case until the assets are
+   * imported, and every screen has to read fine without it.
+   */
+  media?: ExerciseMedia[];
+  description?: string | null;
+  instructions?: string[];
 };
 
 export type ExercisePage = {
@@ -60,6 +77,7 @@ export const PAGE_SIZE = 30;
 export const exerciseKeys = {
   all: ["exercises"] as const,
   list: (filters: ExerciseFilters) => [...exerciseKeys.all, "list", filters] as const,
+  detail: (id: string) => [...exerciseKeys.all, id] as const,
   muscleGroups: () => [...exerciseKeys.all, "muscle-groups"] as const,
   equipment: () => [...exerciseKeys.all, "equipment"] as const,
 };
@@ -77,6 +95,8 @@ export const exercisesApi = {
         offset,
       },
     }),
+
+  get: (id: string) => api.get<Exercise>(`/v1/exercises/${id}`),
 
   muscleGroups: () => api.get<MuscleGroup[]>("/v1/exercises/meta/muscle-groups"),
 

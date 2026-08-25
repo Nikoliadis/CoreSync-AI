@@ -195,6 +195,10 @@ class SyncWorkoutsUseCase:
                 name=payload.get("name"),
                 notes=payload.get("notes"),
                 started_at=_optional_datetime(payload, "startedAt") or operation.at,
+                # The phone already built this session's exercise list and is sending it
+                # as `exercise.add` operations. Seeding from the routine as well would
+                # duplicate every exercise.
+                seed_exercises=False,
             )
         )
         return {"sessionId": str(session.id)}

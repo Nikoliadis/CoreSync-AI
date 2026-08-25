@@ -426,3 +426,85 @@ describe("pausing and resuming", () => {
     expect(payload.pausedSeconds).toBe(0);
   });
 });
+
+describe("starting from a routine", () => {
+  const plan = {
+    id: "routine-1",
+    name: "Push A",
+    exercises: [
+      {
+        exerciseId: "bench",
+        exerciseName: "Bench Press",
+        restSeconds: 120,
+        sets: [
+          { targetRepsMin: 8, targetWeightKg: "60.00" },
+          { targetRepsMin: 8, targetWeightKg: "60.00" },
+        ],
+      },
+      {
+        exerciseId: "ohp",
+        exerciseName: "Overhead Press",
+        restSeconds: null,
+        sets: [{ targetRepsMin: 10, targetWeightKg: null }],
+      },
+    ],
+  };
+
+  it("lays the plan out locally in one write", async () => {
+    // Not thirty writes through addExercise/addSet: that is what a six-exercise routine
+    // would cost before the screen even opened.
+    const session = await mutations.startRoutineSession(plan);
+
+    expect(store.saveSession).toHaveBeenCalledOnce();
+    expect(session.exercises).toHaveLength(2);
+    expect(session.exercises[0]?.sets).toHaveLength(2);
+  });
+
+  it("carries the routine id so the workout is attributed to the plan", async () => {
+    const session = await mutations.startRoutineSession(plan);
+
+    expect(session.routineId).toBe("routine-1");
+    const payload = queue.enqueue.mock.calls[0]?.[1] as { routineId: string };
+    expect(payload.routineId).toBe("routine-1");
+  });
+
+  it("queues the create and each exercise, but no sets", async () => {
+    // The prescribed rows are somewhere to type, not sets that were performed. Sending
+    // them would record a workout nobody did; they go up as each one is ticked.
+    await mutations.startRoutineSession(plan);
+
+    expect(queuedTypes()).toEqual(["session.create", "exercise.add", "exercise.add"]);
+  });
+
+  it("prefills the targets onto the empty rows", async () => {
+    const session = await mutations.startRoutineSession(plan);
+
+    const first = session.exercises[0]?.sets[0];
+    expect(first?.reps).toBe(8);
+    expect(first?.weightKg).toBe(60);
+    expect(first?.isCompleted).toBe(false);
+  });
+
+  it("leaves an unprescribed weight blank rather than zero", async () => {
+    const session = await mutations.startRoutineSession(plan);
+
+    expect(session.exercises[1]?.sets[0]?.weightKg).toBeNull();
+  });
+
+  it("numbers sets from one within each exercise", async () => {
+    const session = await mutations.startRoutineSession(plan);
+
+    expect(session.exercises[0]?.sets.map((s) => s.setNumber)).toEqual([1, 2]);
+    expect(session.exercises[1]?.sets.map((s) => s.setNumber)).toEqual([1]);
+  });
+
+  it("names the session after the routine", async () => {
+    const session = await mutations.startRoutineSession(plan);
+    expect(session.name).toBe("Push A");
+  });
+
+  it("handles a routine with no exercises without queuing any", async () => {
+    await mutations.startRoutineSession({ id: "r", name: "Empty", exercises: [] });
+    expect(queuedTypes()).toEqual(["session.create"]);
+  });
+});

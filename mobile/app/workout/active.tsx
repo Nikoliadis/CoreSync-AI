@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect, useRouter } from "expo-router";
 import { ChevronDown, ChevronUp, Pause, Play, Trash2, X } from "lucide-react-native";
@@ -8,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Screen } from "@/components/ui/screen";
 import { Text } from "@/components/ui/text";
+import { exerciseKeys, exercisesApi } from "@/features/exercises/api";
+import { ExerciseThumbnailButton } from "@/features/exercises/components/exercise-media";
 import { usePickedExercise } from "@/features/exercises/picked-exercise";
 import { SetRow } from "@/features/workouts/components/set-row";
 import {
@@ -398,7 +401,18 @@ function ExerciseCard({
 }) {
   const t = useTranslate();
   const theme = useTheme();
+  const router = useRouter();
   const { history, records } = useExerciseHistory(exercise.exerciseId);
+
+  // Read from the same cache the picker filled, so in the common path — you just chose
+  // this exercise — the thumbnail is already there and no request is made. Failing
+  // leaves the placeholder, which is what an exercise with no media shows anyway.
+  const details = useQuery({
+    queryKey: exerciseKeys.detail(exercise.exerciseId),
+    queryFn: () => exercisesApi.get(exercise.exerciseId),
+    staleTime: 24 * 60 * 60 * 1000,
+    retry: false,
+  });
 
   // One trophy per exercise, on the best set. Badging every set that beats the standing
   // record turns a progressive warm-up into a row of meaningless awards.
@@ -428,6 +442,14 @@ function ExerciseCard({
   return (
     <Card style={styles.exercise}>
       <View style={styles.exerciseHeader}>
+        <ExerciseThumbnailButton
+          media={details.data?.media}
+          name={exercise.exerciseName}
+          size={36}
+          // Mid-set is exactly when somebody wants to check the movement, so the way in
+          // is on the card rather than back through the catalogue.
+          onPress={() => router.push(`/exercise/${exercise.exerciseId}`)}
+        />
         <Text variant="h3" numberOfLines={1} style={styles.grow}>
           {exercise.exerciseName}
         </Text>

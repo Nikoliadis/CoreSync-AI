@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -118,6 +118,9 @@ export default function HomeScreen() {
             label={t("home.weight")}
             value={weight.data ? Number(weight.data.weightKg).toFixed(1) : "—"}
             unit="kg"
+            // The weight tile is where somebody already looks for this number, so it is
+            // the honest door into the chart behind it.
+            onPress={() => router.push("/progress")}
           />
           <Stat
             label={t("home.streak")}
@@ -166,8 +169,20 @@ function Macro({ label, grams, color }: { label: string; grams: number; color: s
   );
 }
 
-function Stat({ label, value, unit }: { label: string; value: string; unit: string }) {
-  return (
+function Stat({
+  label,
+  value,
+  unit,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  unit: string;
+  onPress?: () => void;
+}) {
+  // A tile that navigates and a tile that does not should not look different, so the
+  // Pressable wraps the same Card rather than restyling it.
+  const body = (
     <Card style={styles.stat}>
       <Text variant="caption" tone="muted">
         {label}
@@ -180,6 +195,18 @@ function Stat({ label, value, unit }: { label: string; value: string; unit: stri
         </Text>
       </Text>
     </Card>
+  );
+
+  if (!onPress) return body;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}, ${value} ${unit}`}
+      style={({ pressed }) => [styles.statPressable, { opacity: pressed ? 0.6 : 1 }]}
+    >
+      {body}
+    </Pressable>
   );
 }
 
@@ -195,6 +222,7 @@ const styles = StyleSheet.create({
   macro: { gap: 2 },
   swatch: { width: 20, height: 3, borderRadius: radius.full },
   row: { flexDirection: "row", gap: space.md },
+  statPressable: { flex: 1 },
   stat: { flex: 1, gap: space.xs },
   entry: {
     flexDirection: "row",

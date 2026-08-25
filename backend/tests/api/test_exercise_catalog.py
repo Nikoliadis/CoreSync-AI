@@ -298,3 +298,63 @@ class TestFavorites:
         await client.post(f"/v1/exercises/{exercise_id}/favorite", headers=headers)
         second = await client.post(f"/v1/exercises/{exercise_id}/favorite", headers=headers)
         assert second.status_code == 204
+
+
+class TestExerciseMedia:
+    """Demonstration photographs, from the table down to the JSON.
+
+    `exercise_media` shipped in the first migration and stayed empty for months, which
+    meant nothing ever exercised the path from that table to the client. These tests run
+    it end to end so the importer has something to import *into* that is known to work.
+    """
+
+    async def test_media_reaches_the_client_in_order(
+        self, client: AsyncClient, headers: dict[str, str], postgres_url: str
+    ) -> None:
+        from sqlalchemy import text
+        from sqlalchemy.ext.asyncio import create_async_engine
+
+        exercise_id = await exercise_id_for(client, headers, "Barbell Bench Press")
+
+        # Inserted directly rather than through the importer: this is about the read
+        # path, and the importer needs the network.
+        engine = create_async_engine(postgres_url)
+        try:
+            async with engine.begin() as connection:
+                for order, name in ((1, "second.jpg"), (0, "first.jpg")):
+                    await connection.execute(
+                        text(
+                            "INSERT INTO exercise_media"
+                            " (id, exercise_id, media_type, url, sort_order,"
+                            "  created_at, updated_at)"
+                            " VALUES (gen_random_uuid(), :eid, 'image', :url, :ord,"
+                            "         now(), now())"
+                        ),
+                        {
+                            "eid": exercise_id,
+                            "url": f"https://example.test/{name}",
+                            "ord": order,
+                        },
+                    )
+        finally:
+            await engine.dispose()
+
+        response = await client.get(f"/v1/exercises/{exercise_id}", headers=headers)
+        assert response.status_code == 200, response.text
+
+        media = response.json()["media"]
+        assert [item["url"] for item in media] == [
+            "https://example.test/first.jpg",
+            "https://example.test/second.jpg",
+        ], "media must arrive in sort_order, not insertion order"
+        assert {item["mediaType"] for item in media} == {"image"}
+
+    async def test_an_exercise_without_media_returns_an_empty_list(
+        self, client: AsyncClient, headers: dict[str, str]
+    ) -> None:
+        # The normal case for most of the catalogue. It has to be an empty list rather
+        # than null, because every client renders it without a guard.
+        exercise_id = await exercise_id_for(client, headers, "Back Squat")
+        response = await client.get(f"/v1/exercises/{exercise_id}", headers=headers)
+
+        assert response.json()["media"] == []

@@ -143,6 +143,13 @@ class StartSessionCommand:
     # the real start time rather than having the server invent one.
     started_at: datetime | None = None
     session_id: UUID | None = None
+    #: Whether to expand the routine's exercises into the new session.
+    #:
+    #: True for the online path, where the server builds the session. False for offline
+    #: sync, where the phone has already built it: those exercises exist on the device
+    #: with client-minted ids and arrive as their own ``exercise.add`` operations, so
+    #: seeding here would add a second copy of every one of them under server ids.
+    seed_exercises: bool = True
 
 
 class StartSessionUseCase:
@@ -199,7 +206,11 @@ class StartSessionUseCase:
             # Seed the session from the plan. Prescribed sets are *not* copied as logged
             # sets — the user has not done them yet, and pre-filling them would record a
             # workout nobody performed.
-            if routine is not None:
+            #
+            # Skipped entirely when the client built the session itself; see
+            # `seed_exercises`. The routine is still looked up and still attributed, so
+            # "last performed" and routine history are unaffected.
+            if routine is not None and cmd.seed_exercises:
                 for entry in routine.exercises:
                     session.add_exercise(
                         exercise_id=entry.exercise_id,

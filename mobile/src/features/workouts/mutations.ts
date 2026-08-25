@@ -24,6 +24,7 @@ import {
   type LocalSet,
   type SetType,
   newExercise,
+  newSession,
   newSet,
 } from "./session-model";
 
@@ -50,6 +51,74 @@ export async function startSession(session: LocalSession): Promise<LocalSession>
     name: session.name,
     startedAt: session.startedAt,
   });
+  return session;
+}
+
+/**
+ * Start a workout from a routine, with the plan already laid out.
+ *
+ * Built whole and saved once rather than through `addExercise`/`addSet`, which would be
+ * thirty SQLite writes for a six-exercise routine before the screen even opened.
+ *
+ * The prescribed sets become empty rows, prefilled with the targets. They are *not*
+ * queued: an untouched row is somewhere to type, not a set that was performed, and
+ * sending it would record a workout nobody did. They go up as each one is ticked.
+ *
+ * The exercises themselves are queued, because the server is told not to expand the
+ * routine on the sync path — the device owns this list, and if both built it every
+ * exercise would appear twice.
+ */
+export async function startRoutineSession(routine: {
+  id: string;
+  name: string;
+  exercises: {
+    exerciseId: string;
+    exerciseName: string | null;
+    restSeconds: number | null;
+    sets: { targetRepsMin: number | null; targetWeightKg: string | null }[];
+  }[];
+}): Promise<LocalSession> {
+  const base = newSession({ name: routine.name, routineId: routine.id });
+
+  const exercises: LocalExercise[] = routine.exercises.map((entry, index) => {
+    const exercise = newExercise({
+      exerciseId: entry.exerciseId,
+      exerciseName: entry.exerciseName ?? "Exercise",
+      position: index,
+      restSeconds: entry.restSeconds,
+    });
+    return {
+      ...exercise,
+      sets: entry.sets.map((prescribed, setIndex) =>
+        newSet({
+          sessionExerciseId: exercise.id,
+          setNumber: setIndex + 1,
+          reps: prescribed.targetRepsMin,
+          weightKg: prescribed.targetWeightKg === null ? null : Number(prescribed.targetWeightKg),
+        }),
+      ),
+    };
+  });
+
+  const session: LocalSession = { ...base, exercises };
+  await saveSession(session);
+
+  await enqueue("session.create", {
+    id: session.id,
+    clientSessionId: session.id,
+    routineId: routine.id,
+    name: session.name,
+    startedAt: session.startedAt,
+  });
+  for (const exercise of exercises) {
+    await enqueue("exercise.add", {
+      id: exercise.id,
+      sessionId: session.id,
+      exerciseId: exercise.exerciseId,
+      restSeconds: exercise.restSeconds,
+    });
+  }
+
   return session;
 }
 

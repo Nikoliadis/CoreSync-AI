@@ -133,6 +133,63 @@ sessions only, so on a first-ever session it is correctly empty.
 - [ ] Background the app while *running* for a minute, reopen — the clock caught up
 - [ ] Pause, wait, resume, pause again, resume — the time lost adds up across both
 
+### Routines
+
+- [ ] Workouts tab lists your routines, grouped by folder, ungrouped ones last
+- [ ] Tap **+** beside ROUTINES — the editor opens
+- [ ] Add two exercises through the picker, set reps and set counts, save
+- [ ] The routine appears in the list with the right exercise and set counts
+- [ ] Open it — the prescription reads `3 × 8–12` per exercise
+- [ ] Tap **Start** — the workout opens with every exercise already laid out
+- [ ] **Each exercise appears exactly once** (not twice)
+- [ ] Set rows are pre-filled with the prescribed reps and weight, and are *not* ticked
+- [ ] Do the same **in airplane mode**, reconnect, and check the server agrees:
+
+```bash
+docker exec coresync-postgres-1 psql -U coresync -d coresync -c "
+SELECT s.name, count(se.id) AS exercises
+FROM workout_sessions s
+LEFT JOIN session_exercises se ON se.session_id = s.id
+GROUP BY s.id ORDER BY s.started_at DESC LIMIT 3;"
+```
+
+- [ ] Exercise count matches what you saw on screen — **not double**
+- [ ] Templates screen lists starter routines; adopting one opens *your* copy
+- [ ] Editing the adopted copy does not change the template
+- [ ] Duplicate and delete both work
+
+### Workout history
+
+- [ ] Workouts tab shows finished sessions below the routines
+- [ ] Each row reads date · duration · sets · volume
+- [ ] A session with a PR shows a trophy
+- [ ] Scroll to the bottom — older sessions load, none repeat and none are skipped
+- [ ] Tap a session — its detail shows only the sets you actually completed
+
+### Exercise images
+
+- [ ] Picker rows show a small photograph, or a dumbbell placeholder
+- [ ] Rows do **not** shift or jump as images load
+- [ ] Tap a row's picture (not the row) — the exercise detail opens
+- [ ] The detail shows a 4:3 photograph you can swipe, with paging dots
+- [ ] Muscles and equipment are listed
+- [ ] Active workout: each exercise card has a small thumbnail; tapping it opens the detail
+- [ ] Open the same exercise twice — the second time the image appears instantly (disk cache)
+- [ ] In airplane mode, an exercise you have not opened shows the placeholder and does not error
+
+### Progress
+
+- [ ] Home: tap the **Weight** tile — Progress opens
+- [ ] Enter today's weight and save — the chart and headline update
+- [ ] The chart shows scattered dots *and* a smooth trend line, on the same scale
+- [ ] Switch 30d / 90d / 1y — the chart redraws
+- [ ] With only one weigh-in, the chart still renders (no blank box, no crash)
+- [ ] The change reads with a sign, e.g. `−1.2 kg`
+- [ ] With no weigh-ins at all it reads `—`, **not** `0.0 kg`
+- [ ] Tap **+** beside MEASUREMENTS, fill in *only* waist, save
+- [ ] The other nine sites keep their previous values, they are not wiped
+- [ ] Volume by muscle group shows bars, longest first
+
 ### Sync
 
 - [ ] **Turn airplane mode off**

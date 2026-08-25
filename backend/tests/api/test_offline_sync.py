@@ -610,3 +610,68 @@ class TestPausedTimeSurvivesTheQueue:
 
         session = await client.get(f"/v1/workouts/sessions/{session_id}", headers=headers)
         assert session.json()["durationSeconds"] == 30 * 60
+
+
+class TestStartingFromARoutineOffline:
+    """The client owns the exercise list, so the server must not add its own.
+
+    Starting from a routine online lets the server expand the plan into the session.
+    Offline it cannot: the phone needs those exercises on screen immediately, so it
+    creates them locally with its own ids and queues an `exercise.add` for each. If the
+    flush then also asked the server to seed, every exercise would appear twice — once
+    under the server's id and once under the client's.
+    """
+
+    @pytest.fixture
+    async def routine_id(self, client: AsyncClient, headers: dict[str, str], bench_id: str) -> str:
+        response = await client.post(
+            "/v1/workouts/routines",
+            json={
+                "name": "Push A",
+                "exercises": [{"exerciseId": bench_id, "sets": [{"targetRepsMin": 8}]}],
+            },
+            headers=headers,
+        )
+        assert response.status_code in (200, 201), response.text
+        return response.json()["id"]
+
+    async def test_a_routine_workout_logged_offline_has_each_exercise_once(
+        self, client: AsyncClient, headers: dict[str, str], bench_id: str, routine_id: str
+    ) -> None:
+        session_id, entry_id = str(uuid4()), str(uuid4())
+        body = await flush(
+            client,
+            headers,
+            [
+                op(
+                    "session.create",
+                    {"id": session_id, "name": "Push A", "routineId": routine_id},
+                ),
+                op(
+                    "exercise.add",
+                    {"id": entry_id, "sessionId": session_id, "exerciseId": bench_id},
+                ),
+            ],
+        )
+        assert [r["status"] for r in body["results"]] == ["applied", "applied"]
+
+        session = await client.get(f"/v1/workouts/sessions/{session_id}", headers=headers)
+        exercises = session.json()["exercises"]
+
+        assert len(exercises) == 1, "the routine was seeded on top of the client's own list"
+        assert exercises[0]["id"] == entry_id
+
+    async def test_the_routine_is_still_attributed(
+        self, client: AsyncClient, headers: dict[str, str], routine_id: str
+    ) -> None:
+        # Not seeding must not mean forgetting which plan was followed — that link is
+        # what "last performed" and routine history are built on.
+        session_id = str(uuid4())
+        await flush(
+            client,
+            headers,
+            [op("session.create", {"id": session_id, "name": "Push A", "routineId": routine_id})],
+        )
+
+        session = await client.get(f"/v1/workouts/sessions/{session_id}", headers=headers)
+        assert session.json()["routineId"] == routine_id
