@@ -82,7 +82,15 @@ class Settings(BaseSettings):
     max_failed_logins: int = 10
     account_lockout_minutes: int = 15
 
+    #: The web OAuth client id, used by the browser flow.
     google_oauth_client_id: str = ""
+    #: Native client ids, one per platform.
+    #:
+    #: Google issues a separate client id for Web, iOS and Android, and stamps whichever
+    #: one requested the token into `aud`. A verifier that knows only the web id rejects
+    #: every sign-in from a phone — the same defect the Apple verifier had.
+    google_ios_client_id: str = ""
+    google_android_client_id: str = ""
     #: The Services ID, used by the *web* Sign in with Apple flow.
     apple_service_id: str = ""
     #: The iOS app's bundle identifier.

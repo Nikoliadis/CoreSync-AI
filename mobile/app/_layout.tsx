@@ -20,7 +20,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { notificationKeys } from "@/features/notifications/api";
+import { asRoute, notificationKeys } from "@/features/notifications/api";
 import { refreshRegistration, routeFromNotification } from "@/features/notifications/push";
 import { tokenStore } from "@/lib/api/client";
 import { createQueryClient } from "@/lib/api/query-client";
@@ -144,7 +144,7 @@ function PushListeners() {
     let cancelled = false;
 
     const go = (route: string | null) => {
-      if (!cancelled && route) router.push(route);
+      if (!cancelled && route) router.push(asRoute(route));
     };
 
     // The cold-start case: the notification launched the app.

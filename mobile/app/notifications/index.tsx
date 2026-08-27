@@ -12,6 +12,7 @@ import {
   notificationsApi,
   relativeTime,
   routeFor,
+  asRoute,
 } from "@/features/notifications/api";
 import { useTranslate } from "@/lib/i18n";
 import { space, useTheme } from "@/theme";
@@ -55,7 +56,7 @@ export default function NotificationsScreen() {
     }
 
     const route = routeFor(notification);
-    if (route) router.push(route);
+    if (route) router.push(asRoute(route));
   };
 
   const markAll = () => {

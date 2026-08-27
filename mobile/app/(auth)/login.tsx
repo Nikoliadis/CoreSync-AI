@@ -11,6 +11,7 @@ import { Screen } from "@/components/ui/screen";
 import { Text } from "@/components/ui/text";
 import { AppleDivider } from "@/features/auth/components/apple-divider";
 import { AppleSignInButton } from "@/features/auth/components/apple-sign-in-button";
+import { GoogleSignInButton } from "@/features/auth/components/google-sign-in-button";
 import { ApiError } from "@/lib/api/client";
 import { useTranslate } from "@/lib/i18n";
 import { useAuth } from "@/stores/auth";
@@ -102,6 +103,7 @@ export default function LoginScreen() {
           <Button label={t("auth.login")} loading={isSubmitting} onPress={onSubmit} />
 
           <AppleDivider />
+          <GoogleSignInButton onError={setFormError} />
           <AppleSignInButton onError={setFormError} />
 
           <Pressable

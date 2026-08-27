@@ -45,12 +45,28 @@ class _JwksCache:
 
 
 class GoogleOidcVerifier:
+    """Sign in with Google.
+
+    Google issues a distinct OAuth client id per platform — Web, iOS and Android — and
+    stamps whichever one requested the token into the `aud` claim. All configured ids are
+    therefore accepted; knowing only the web one means every sign-in from a phone is
+    refused as an invalid token, with nothing in the message to say why.
+    """
+
     def __init__(self, settings: Settings) -> None:
-        self._client_id = settings.google_oauth_client_id
+        self._audiences = [
+            value
+            for value in (
+                settings.google_oauth_client_id,
+                settings.google_ios_client_id,
+                settings.google_android_client_id,
+            )
+            if value
+        ]
         self._jwks = _JwksCache(GOOGLE_JWKS_URL)
 
     async def verify(self, id_token: str, *, nonce: str | None = None) -> OidcIdentity:
-        if not self._client_id:
+        if not self._audiences:
             raise InvalidTokenError("Google sign-in is not configured")
 
         key = self._jwks.signing_key(id_token)
@@ -59,7 +75,7 @@ class GoogleOidcVerifier:
                 id_token,
                 key,
                 algorithms=["RS256"],
-                audience=self._client_id,
+                audience=self._audiences,
                 options={"require": ["exp", "iat", "sub", "aud", "iss"]},
             )
         except jwt.InvalidTokenError as exc:

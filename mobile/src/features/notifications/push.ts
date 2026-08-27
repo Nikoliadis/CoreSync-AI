@@ -31,7 +31,11 @@ export type PermissionState = "granted" | "denied" | "undetermined" | "unsupport
 Notifications.setNotificationHandler({
   handleNotification: () =>
     Promise.resolve({
-      shouldShowAlert: true,
+      // SDK 54 split the old `shouldShowAlert` into these two. A banner is the
+      // interruption; the list is Notification Centre, which should keep the record
+      // even when the banner has been dismissed.
+      shouldShowBanner: true,
+      shouldShowList: true,
       shouldPlaySound: false,
       shouldSetBadge: true,
     }),

@@ -350,4 +350,9 @@ export const en = {
   "calendar.hours": "hours",
   "calendar.dayTrained": "{date}, {count} workouts",
   "calendar.dayRest": "{date}, rest day",
+
+  // ----------------------------------------------------------------- google
+  "google.signIn": "Continue with Google",
+  "google.signInFailed": "Google sign-in did not complete. Try again.",
+  "google.needsConnection": "No connection. Google sign-in needs one.",
 } satisfies Record<string, string>;

@@ -4,6 +4,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  View,
   type PressableProps,
   type ViewStyle,
 } from "react-native";
@@ -20,6 +21,14 @@ type Props = Omit<PressableProps, "style" | "children"> & {
   loading?: boolean;
   /** Fires a light impact on press. On by default for anything that changes state. */
   haptic?: boolean;
+  /**
+   * Rendered before the label.
+   *
+   * For provider marks, which brand guidelines require beside the wording rather than
+   * instead of it. Hidden from screen readers — the button's own label already says what
+   * it does, and announcing "image, Google" before it would read twice.
+   */
+  icon?: React.ReactNode;
   style?: ViewStyle;
 };
 
@@ -37,6 +46,7 @@ export function Button({
   size = "md",
   loading = false,
   haptic = true,
+  icon,
   disabled,
   onPress,
   style,
@@ -88,9 +98,16 @@ export function Button({
       {loading ? (
         <ActivityIndicator color={foreground[variant]} />
       ) : (
-        <Text style={[styles.label, { color: foreground[variant] }]} numberOfLines={1}>
-          {label}
-        </Text>
+        <>
+          {icon ? (
+            <View style={styles.icon} accessibilityElementsHidden importantForAccessibility="no">
+              {icon}
+            </View>
+          ) : null}
+          <Text style={[styles.label, { color: foreground[variant] }]} numberOfLines={1}>
+            {label}
+          </Text>
+        </>
       )}
     </Pressable>
   );
@@ -104,6 +121,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingHorizontal: space.xl,
   },
+  icon: { marginRight: space.sm },
   label: {
     fontSize: type.body.fontSize,
     fontWeight: "600",

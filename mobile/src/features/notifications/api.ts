@@ -157,3 +157,19 @@ export function routeFor(notification: Notification): string | null {
   if (link.startsWith("/")) return link;
   return null;
 }
+
+/**
+ * A validated deep link, typed for the router.
+ *
+ * expo-router 6 types `push()` against the routes it can see in `app/`, which is the
+ * right default — it catches a typo in a hardcoded path at compile time. A notification
+ * link is the one case it cannot help with: the string arrives from the server at
+ * runtime, so no static type can describe it.
+ *
+ * The cast lives here, once, behind the `startsWith("/")` check in `routeFor` — rather
+ * than scattered at each call site where the reasoning would have to be repeated and
+ * would eventually be copied somewhere it does not hold.
+ */
+export function asRoute(link: string): Parameters<typeof import("expo-router").router.push>[0] {
+  return link as Parameters<typeof import("expo-router").router.push>[0];
+}

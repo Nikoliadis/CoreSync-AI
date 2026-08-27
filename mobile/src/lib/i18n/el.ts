@@ -376,4 +376,9 @@ export const el: Messages = {
   "calendar.hours": "ώρες",
   "calendar.dayTrained": "{date}, {count} προπονήσεις",
   "calendar.dayRest": "{date}, ημέρα ξεκούρασης",
+
+  // ----------------------------------------------------------------- google
+  "google.signIn": "Συνέχεια με Google",
+  "google.signInFailed": "Η σύνδεση με Google δεν ολοκληρώθηκε. Δοκίμασε ξανά.",
+  "google.needsConnection": "Δεν υπάρχει σύνδεση. Η σύνδεση με Google τη χρειάζεται.",
 };
