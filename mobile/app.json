@@ -20,7 +20,8 @@
         "UIBackgroundModes": [
           "remote-notification"
         ]
-      }
+      },
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "ai.coresync.app",
@@ -52,7 +53,9 @@
           "color": "#c8ff3d",
           "defaultChannel": "workout_reminder"
         }
-      ]
+      ],
+      "expo-apple-authentication",
+      "@sentry/react-native"
     ],
     "experiments": {
       "typedRoutes": true

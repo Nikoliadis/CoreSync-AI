@@ -239,7 +239,7 @@ export default function RoutineEditScreen() {
                   {t("workouts.sets")}
                 </Text>
                 <IconAction
-                  label="One fewer set"
+                  label={t("active.oneFewerSet")}
                   disabled={exercise.setCount <= 1}
                   onPress={() => update(exercise.key, { setCount: exercise.setCount - 1 })}
                 >
@@ -249,7 +249,7 @@ export default function RoutineEditScreen() {
                   {exercise.setCount}
                 </Text>
                 <IconAction
-                  label="One more set"
+                  label={t("active.oneMoreSet")}
                   disabled={exercise.setCount >= 30}
                   onPress={() => update(exercise.key, { setCount: exercise.setCount + 1 })}
                 >

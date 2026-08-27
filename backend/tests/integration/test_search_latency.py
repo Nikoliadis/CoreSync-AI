@@ -11,6 +11,28 @@ with catalogue size and the part an index change can fix.
 
 Marked `slow`: it seeds thousands of rows. It is a gate, not something to run on every
 save.
+
+**If this fails, read this before touching an index.**
+
+It was investigated on 2026-08-27 after p95 appeared to degrade from 165ms to 445ms
+across a working session. The cause was the machine, not the query:
+
+- Idle, p95 measures 91-107ms against the 150ms budget, repeatably.
+- Under concurrent load — another suite, a bundler — the same code measures 165-445ms.
+- `EXPLAIN (ANALYZE, BUFFERS)` over the seeded catalogue shows the fetch executing in
+  11ms and the count in 1.3ms, with `ix_foods_search` and `ix_foods_name_trgm` both used
+  under a BitmapOr and every buffer a `shared hit`. There is no sequential scan and
+  nothing is read from disk.
+
+So roughly 12ms of the measurement is the database and the rest is driver round trips and
+container networking, which is exactly the part that inflates when the host is contended.
+The control measurement below exists to tell those two situations apart in the failure
+message, because they have completely different fixes.
+
+The headroom is real but not generous: the tail (`max`) does cross 150ms on an idle
+machine. If the budget starts failing on a genuinely idle host, the query cost worth
+attacking first is the pair of round trips — a `COUNT(*)` over every match, then a fetch
+that computes `similarity()` across all of them to order 25 rows.
 """
 
 from __future__ import annotations
@@ -36,6 +58,13 @@ pytestmark = [pytest.mark.integration, pytest.mark.slow]
 P95_BUDGET_MS = 150.0
 CATALOGUE_SIZE = 10_000
 ITERATIONS = 60
+
+#: What a `SELECT 1` round trip should cost on an unloaded machine.
+#:
+#: Measured at roughly 0.2-0.5ms locally. Well above that means the host is contended,
+#: which inflates every timing below by a constant that has nothing to do with the query.
+#: This never relaxes the budget — it only explains a failure.
+CONTROL_CEILING_MS = 3.0
 
 # Real Greek search terms, chosen to exercise the paths that behave differently:
 # a common prefix, an accented word typed without accents, a Latin brand, a typo.
@@ -106,6 +135,22 @@ async def loaded_catalogue(postgres_url: str) -> str:
     return postgres_url
 
 
+async def _control(session: AsyncSession, iterations: int) -> float:
+    """Median round-trip for a trivial indexed query.
+
+    The machine's floor. Every search timing includes this — a driver round trip, the
+    container's network, and whatever else the host is busy with — so comparing against
+    it separates "the query got slower" from "the machine is loaded", which are the two
+    explanations for a red gate and have completely different fixes.
+    """
+    timings = []
+    for _ in range(iterations):
+        started = time.perf_counter()
+        await session.execute(text("SELECT 1"))
+        timings.append((time.perf_counter() - started) * 1000)
+    return statistics.median(timings)
+
+
 async def _measure(session: AsyncSession, user_id, query: str, iterations: int) -> list[float]:
     repository = SqlAlchemyFoodRepository(session)
     timings = []
@@ -123,7 +168,10 @@ class TestSearchLatency:
         user_id = uuid7()
 
         timings: list[float] = []
+        control = 0.0
         async with factory() as session:
+            await _control(session, 5)  # warm the connection
+            control = await _control(session, 20)
             # One warm-up query per term: the first execution of a prepared statement
             # includes planning, and a benchmark that measures planning once and
             # execution fifty-nine times is measuring the wrong thing.
@@ -143,12 +191,30 @@ class TestSearchLatency:
         print(
             f"\nfood search over {CATALOGUE_SIZE} rows — "
             f"p50 {p50:.1f}ms  p95 {p95:.1f}ms  max {timings[-1]:.1f}ms "
-            f"(budget {P95_BUDGET_MS:.0f}ms)"
+            f"(budget {P95_BUDGET_MS:.0f}ms, control {control:.2f}ms)"
         )
+
+        # The budget is absolute and is never adjusted for a slow machine: the user waits
+        # wall-clock milliseconds regardless of why it was slow. The control only decides
+        # what the failure message tells whoever has to fix it.
+        if control > CONTROL_CEILING_MS:
+            diagnosis = (
+                f"The control query also took {control:.2f}ms against a "
+                f"{CONTROL_CEILING_MS}ms ceiling, so the host was busy. This is very "
+                "likely environmental rather than a query regression — re-run with "
+                "nothing else using the machine before investigating the query."
+            )
+        else:
+            diagnosis = (
+                f"The control query was {control:.2f}ms, which is normal, so the host "
+                "was not the problem. Investigate the query: run EXPLAIN (ANALYZE, "
+                "BUFFERS) and confirm ix_foods_search and ix_foods_name_trgm are both "
+                "still used under a BitmapOr."
+            )
 
         assert p95 < P95_BUDGET_MS, (
             f"p95 {p95:.1f}ms exceeds the {P95_BUDGET_MS:.0f}ms budget from docs/15. "
-            f"p50 was {p50:.1f}ms over {CATALOGUE_SIZE} rows."
+            f"p50 was {p50:.1f}ms over {CATALOGUE_SIZE} rows. {diagnosis}"
         )
 
     async def test_an_accented_query_is_no_slower_than_an_unaccented_one(

@@ -60,24 +60,24 @@ export default function ProfileScreen() {
 
         <Card style={styles.card}>
           <Text variant="overline" tone="muted">
-            PLAN
+            {t("settings.plan")}
           </Text>
           <NavRow
-            label="Goal and daily targets"
-            detail={goalSummary(me.data?.goal ?? null) ?? "Not set"}
+            label={t("settings.goalAndTargets")}
+            detail={goalSummary(me.data?.goal ?? null) ?? t("goals.notSet")}
             onPress={() => router.push("/goals")}
           />
           <NavRow
-            label="Progress"
-            detail="Weight, measurements, volume"
+            label={t("progress.title")}
+            detail={t("settings.progressDetail")}
             onPress={() => router.push("/progress")}
           />
           <NavRow
-            label="Achievements"
+            label={t("achievements.title")}
             detail={
               achievements.data
                 ? `${achievements.data.earnedCount} of ${achievements.data.totalCount} earned`
-                : "Badges and streaks"
+                : t("achievements.badgesAndStreaks")
             }
             onPress={() => router.push("/achievements")}
           />
@@ -113,27 +113,20 @@ export default function ProfileScreen() {
               />
             ))}
           </View>
-          {locale === "el" && (
-            /* Honest about the state of it: the catalogue is not populated yet, and
-               falling back to English silently would look like a bug. */
-            <Text variant="caption" tone="muted">
-              Greek is being translated. Untranslated text stays in English.
-            </Text>
-          )}
         </Card>
 
         <Card style={styles.card}>
           <Text variant="overline" tone="muted">
-            APP
+            {t("settings.app")}
           </Text>
           <NavRow
-            label="Notifications"
-            detail="What we send, and when"
+            label={t("notifications.title")}
+            detail={t("settings.notificationsDetail")}
             onPress={() => router.push("/notifications/preferences")}
           />
           <NavRow
-            label="Settings"
-            detail="Units, privacy, account"
+            label={t("settings.title")}
+            detail={t("settings.settingsDetail")}
             onPress={() => router.push("/settings")}
           />
         </Card>

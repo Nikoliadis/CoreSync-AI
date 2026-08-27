@@ -86,7 +86,7 @@ export default function GoalsScreen() {
     if (saving) return;
     const parsedWeight = targetWeight.trim() === "" ? null : Number(targetWeight.replace(",", "."));
     if (parsedWeight !== null && (!Number.isFinite(parsedWeight) || parsedWeight <= 0)) {
-      Alert.alert("Check that weight", "Target weight is not a number.");
+      Alert.alert(t("goals.checkWeight"), t("goals.weightNotANumber"));
       return;
     }
 
@@ -105,9 +105,8 @@ export default function GoalsScreen() {
         // Said out loud. The app just gave different numbers than were asked for, and
         // discovering that silently is how people conclude the maths is broken.
         Alert.alert(
-          "Targets raised to a safe floor",
-          "The deficit you asked for fell below the minimum we will set, so your calories " +
-            "were raised. Aim for a slower rate if you want the deficit you had in mind.",
+          t("goals.clampedTitle"),
+          t("goals.clampedBody"),
         );
       }
     } catch (error) {
@@ -139,7 +138,7 @@ export default function GoalsScreen() {
             <Text tone="accent">{t("common.cancel")}</Text>
           </Pressable>
           <Text variant="h3" style={styles.title}>
-            Goal
+            {t("goals.title")}
           </Text>
           <View style={styles.action} />
         </View>
@@ -175,7 +174,7 @@ export default function GoalsScreen() {
             <Card style={styles.card}>
               <View style={styles.row}>
                 <Text variant="body" style={styles.grow}>
-                  Target weight
+                  {t("goals.targetWeight")}
                 </Text>
                 <TextInput
                   value={targetWeight}
@@ -184,7 +183,7 @@ export default function GoalsScreen() {
                   selectTextOnFocus
                   placeholder={currentWeight ? Number(currentWeight).toFixed(1) : "—"}
                   placeholderTextColor={theme.textMuted}
-                  accessibilityLabel="Target weight in kilograms"
+                  accessibilityLabel={t("goals.targetWeightLabel")}
                   style={[styles.field, { color: theme.text, backgroundColor: theme.surfaceWell }]}
                 />
                 <Text variant="caption" tone="muted" style={styles.unit}>
@@ -194,7 +193,7 @@ export default function GoalsScreen() {
 
               <View style={styles.row}>
                 <Text variant="body" style={styles.grow}>
-                  Weekly rate
+                  {t("goals.weeklyRate")}
                 </Text>
                 <TextInput
                   value={rate}
@@ -203,7 +202,7 @@ export default function GoalsScreen() {
                   selectTextOnFocus
                   placeholder="0.50"
                   placeholderTextColor={theme.textMuted}
-                  accessibilityLabel="Weekly rate in kilograms"
+                  accessibilityLabel={t("goals.weeklyRateLabel")}
                   style={[styles.field, { color: theme.text, backgroundColor: theme.surfaceWell }]}
                 />
                 <Text variant="caption" tone="muted" style={styles.unit}>
@@ -222,7 +221,7 @@ export default function GoalsScreen() {
           {targets && (
             <Card style={styles.card}>
               <Text variant="overline" tone="muted">
-                CURRENT DAILY TARGETS
+                {t("goals.currentTargets")}
               </Text>
               <View style={styles.targets}>
                 <Target label="kcal" value={targets.calories} />
@@ -239,14 +238,13 @@ export default function GoalsScreen() {
           )}
 
           <Button
-            label={saving ? t("common.loading") : "Save goal and recalculate"}
+            label={saving ? t("common.loading") : t("goals.saveAndRecalculate")}
             disabled={saving}
             onPress={() => void onSave()}
           />
 
           <Text variant="caption" tone="muted">
-            Saving recalculates your daily targets from your profile, current weight and
-            this goal.
+            {t("goals.recalculateNote")}
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>

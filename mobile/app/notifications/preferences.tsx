@@ -34,7 +34,7 @@ import { useTranslate } from "@/lib/i18n";
 import { space, useTheme } from "@/theme";
 
 const QUIET_PRESETS = [
-  { label: "Off", start: null, end: null },
+  { label: null, start: null, end: null },
   { label: "22:00 – 07:00", start: 22, end: 7 },
   { label: "23:00 – 08:00", start: 23, end: 8 },
 ] as const;
@@ -106,7 +106,7 @@ export default function NotificationPreferencesScreen() {
     <Screen edges={["top"]} padded={false}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Text variant="h3" style={styles.grow}>
-          Notifications
+          {t("notifications.title")}
         </Text>
         <Pressable onPress={() => router.back()} accessibilityRole="button" style={styles.close}>
           <Text tone="accent">{t("common.done")}</Text>
@@ -121,27 +121,25 @@ export default function NotificationPreferencesScreen() {
           // who has no idea what they are agreeing to.
           <Card style={styles.card}>
             <Text variant="overline" tone="muted">
-              TURN ON NOTIFICATIONS
+              {t("notifications.turnOn")}
             </Text>
             <Text variant="caption" tone="secondary">
               {permission === "denied"
-                ? "Notifications are turned off for CoreSync in your device settings. " +
-                  "You can turn them back on there."
+                ? t("notifications.permissionDenied")
                 : permission === "unsupported"
-                  ? "This device cannot receive push notifications. A simulator never can."
-                  : "We will tell you when you beat a record, when a streak is about to " +
-                    "run out, and when the coach has noticed something. Nothing else."}
+                  ? t("notifications.permissionUnsupported")
+                  : t("notifications.permissionPitch")}
             </Text>
             {permission === "undetermined" && (
               <Button
-                label={asking ? "Asking…" : "Allow notifications"}
+                label={asking ? t("notifications.asking") : t("notifications.allow")}
                 disabled={asking}
                 onPress={() => void ask()}
               />
             )}
             {permission === "denied" && (
               <Button
-                label="Open device settings"
+                label={t("notifications.openSettings")}
                 variant="secondary"
                 onPress={() => void Linking.openSettings()}
               />
@@ -151,21 +149,21 @@ export default function NotificationPreferencesScreen() {
 
         <Card style={styles.card}>
           <Text variant="overline" tone="muted">
-            DELIVERY
+            {t("notifications.delivery")}
           </Text>
           <Row
-            label="Push notifications"
+            label={t("notifications.push")}
             detail={
               permission === "granted"
-                ? "On this device."
-                : "Allow notifications above for this to have any effect."
+                ? t("notifications.pushOnThisDevice")
+                : t("notifications.pushNeedsPermission")
             }
             value={current.pushEnabled && permission === "granted"}
             onChange={(value) => update.mutate({ pushEnabled: value })}
           />
           <Row
-            label="Email"
-            detail="Weekly summaries and account messages."
+            label={t("notifications.email")}
+            detail={t("notifications.emailDetail")}
             value={current.emailEnabled}
             onChange={(value) => update.mutate({ emailEnabled: value })}
           />
@@ -173,7 +171,7 @@ export default function NotificationPreferencesScreen() {
 
         <Card style={styles.card}>
           <Text variant="overline" tone="muted">
-            WHAT TO SEND
+            {t("notifications.whatToSend")}
           </Text>
           {CATEGORIES.map((category) => (
             <Row
@@ -187,17 +185,16 @@ export default function NotificationPreferencesScreen() {
             />
           ))}
           <Text variant="caption" tone="muted">
-            Account and security messages are always sent.
+            {t("notifications.alwaysSent")}
           </Text>
         </Card>
 
         <Card style={styles.card}>
           <Text variant="overline" tone="muted">
-            QUIET HOURS
+            {t("notifications.quietHours")}
           </Text>
           <Text variant="caption" tone="muted">
-            Nothing is delivered during these hours. It arrives afterwards rather than
-            being dropped.
+            {t("notifications.quietHoursBody")}
           </Text>
           <View style={styles.presets}>
             {QUIET_PRESETS.map((preset) => {
@@ -205,7 +202,7 @@ export default function NotificationPreferencesScreen() {
                 preset.start === null ? activeQuiet === null : activeQuiet === preset.label;
               return (
                 <Pressable
-                  key={preset.label}
+                  key={preset.label ?? "off"}
                   onPress={() =>
                     update.mutate(
                       preset.start === null
@@ -226,7 +223,9 @@ export default function NotificationPreferencesScreen() {
                   ]}
                 >
                   <Text variant="caption" tone={selected ? "default" : "muted"}>
-                    {preset.label}
+                    {/* A null label is the "off" preset — its wording is translated,
+                        while the clock ranges are numerals that read the same in both. */}
+                    {preset.label ?? t("notifications.off")}
                   </Text>
                 </Pressable>
               );

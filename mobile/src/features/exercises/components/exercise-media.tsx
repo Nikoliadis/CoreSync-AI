@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from "re
 
 import { Text } from "@/components/ui/text";
 import { type ExerciseMedia } from "@/features/exercises/api";
+import { useTranslate } from "@/lib/i18n";
 import { radius, space, useTheme } from "@/theme";
 
 /**
@@ -28,6 +29,7 @@ export function ExerciseMediaViewer({
   media: readonly ExerciseMedia[] | undefined;
   name: string;
 }) {
+  const t = useTranslate();
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const [index, setIndex] = useState(0);
@@ -54,7 +56,7 @@ export function ExerciseMediaViewer({
       >
         <Dumbbell size={40} color={theme.textMuted} />
         <Text variant="caption" tone="muted">
-          No demonstration yet
+          {t("exercises.noDemonstration")}
         </Text>
       </View>
     );
@@ -169,11 +171,12 @@ export function ExerciseThumbnailButton({
   onPress: () => void;
   size?: number;
 }) {
+  const t = useTranslate();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`How to do ${name}`}
+      accessibilityLabel={t("exercises.howToDo", { name })}
       hitSlop={6}
     >
       <ExerciseThumbnail media={media} size={size} />

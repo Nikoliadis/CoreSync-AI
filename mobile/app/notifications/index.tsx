@@ -71,17 +71,17 @@ export default function NotificationsScreen() {
     <Screen edges={["top"]} padded={false}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <View style={styles.grow}>
-          <Text variant="h3">Notifications</Text>
+          <Text variant="h3">{t("notifications.title")}</Text>
           {unread > 0 && (
             <Text variant="caption" tone="muted">
-              {unread} unread
+              {t("notifications.unreadCount", { count: unread })}
             </Text>
           )}
         </View>
         <Pressable
           onPress={() => router.push("/notifications/preferences")}
           accessibilityRole="button"
-          accessibilityLabel="Notification settings"
+          accessibilityLabel={t("notifications.settings")}
           hitSlop={8}
           style={styles.icon}
         >
@@ -106,7 +106,7 @@ export default function NotificationsScreen() {
           ListHeaderComponent={
             unread > 0 ? (
               <Button
-                label="Mark all as read"
+                label={t("notifications.markAllRead")}
                 variant="ghost"
                 size="sm"
                 onPress={markAll}
@@ -116,9 +116,9 @@ export default function NotificationsScreen() {
           }
           ListEmptyComponent={
             <View style={styles.centre}>
-              <Text tone="secondary">Nothing yet.</Text>
+              <Text tone="secondary">{t("notifications.emptyTitle")}</Text>
               <Text variant="caption" tone="muted" style={styles.centred}>
-                Reminders, records and coach insights land here.
+                {t("notifications.emptyBody")}
               </Text>
             </View>
           }

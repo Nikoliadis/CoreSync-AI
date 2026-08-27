@@ -100,7 +100,7 @@ export default function NutritionScreen() {
         <Pressable
           onPress={() => setDay(shiftDate(day, -1))}
           accessibilityRole="button"
-          accessibilityLabel="Previous day"
+          accessibilityLabel={t("nutrition.previousDay")}
           style={styles.arrow}
         >
           <ChevronLeft size={22} color={theme.textMuted} />
@@ -114,7 +114,7 @@ export default function NutritionScreen() {
           // way to get lost in empty days.
           disabled={isFuture(shiftDate(day, 1))}
           accessibilityRole="button"
-          accessibilityLabel="Next day"
+          accessibilityLabel={t("nutrition.nextDay")}
           accessibilityState={{ disabled: isFuture(shiftDate(day, 1)) }}
           style={[styles.arrow, { opacity: isFuture(shiftDate(day, 1)) ? 0.3 : 1 }]}
         >
@@ -281,7 +281,7 @@ export default function NutritionScreen() {
             })}
 
             <Button
-              label="Copy a previous day"
+              label={t("nutrition.copyPreviousDay")}
               variant="secondary"
               onPress={() =>
                 router.push({ pathname: "/nutrition/copy", params: { date: day } })
@@ -430,6 +430,7 @@ function QuantityField({
   value: string;
   onChange: (next: string) => void;
 }) {
+  const t = useTranslate();
   const theme = useTheme();
   return (
     <TextInput
@@ -438,7 +439,7 @@ function QuantityField({
       keyboardType="decimal-pad"
       selectTextOnFocus
       autoFocus
-      accessibilityLabel="Amount"
+      accessibilityLabel={t("nutrition.amount")}
       style={[
         styles.quantity,
         { color: theme.text, backgroundColor: theme.surfaceWell },

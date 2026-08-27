@@ -3,6 +3,7 @@ import { memo, useEffect, useState } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
 
 import { Text } from "@/components/ui/text";
+import { useTranslate } from "@/lib/i18n";
 import { HIT_SIZE, radius, space, type, useTheme } from "@/theme";
 
 import { type LocalSet } from "../local-store";
@@ -36,6 +37,7 @@ export const SetRow = memo(function SetRow({
   onToggle,
   onDelete,
 }: Props) {
+  const t = useTranslate();
   const theme = useTheme();
 
   // Local text state so a partially typed number ("8." on the way to "8.5") is not
@@ -88,7 +90,7 @@ export const SetRow = memo(function SetRow({
           <Trophy
             size={13}
             color={theme.accentText}
-            accessibilityLabel="Personal record"
+            accessibilityLabel={t("active.personalRecord")}
           />
         )}
       </View>
@@ -103,7 +105,7 @@ export const SetRow = memo(function SetRow({
         selectTextOnFocus
         placeholder="—"
         placeholderTextColor={theme.textMuted}
-        accessibilityLabel={`Weight for set ${set.setNumber}`}
+        accessibilityLabel={t("active.weightFor", { number: set.setNumber })}
         style={[styles.field, { color: theme.text, backgroundColor: theme.surfaceWell }]}
       />
 
@@ -117,7 +119,7 @@ export const SetRow = memo(function SetRow({
         selectTextOnFocus
         placeholder="—"
         placeholderTextColor={theme.textMuted}
-        accessibilityLabel={`Reps for set ${set.setNumber}`}
+        accessibilityLabel={t("active.repsFor", { number: set.setNumber })}
         style={[styles.field, { color: theme.text, backgroundColor: theme.surfaceWell }]}
       />
 
@@ -129,10 +131,10 @@ export const SetRow = memo(function SetRow({
         accessibilityState={{ checked: set.isCompleted }}
         accessibilityLabel={
           showRecord
-            ? `Set ${set.setNumber} complete, personal record`
-            : `Set ${set.setNumber} complete`
+            ? t("active.setCompleteRecord", { number: set.setNumber })
+            : t("active.setComplete", { number: set.setNumber })
         }
-        accessibilityHint="Long press to delete this set"
+        accessibilityHint={t("active.deleteSetHint")}
         style={({ pressed }) => [
           styles.tick,
           {

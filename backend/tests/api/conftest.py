@@ -70,6 +70,24 @@ def email_sender() -> CapturingEmailSender:
 
 
 @pytest.fixture
+def apple_verifier() -> FakeOidcVerifier:
+    """Apple's identity, as the real verifier would return it after checking the JWKS.
+
+    `name` is None because Apple never puts it in the token — the client forwards it
+    separately, and only on the first authorisation.
+    """
+    return FakeOidcVerifier(
+        OidcIdentity(
+            subject="apple-subject-456",
+            email="apple-user@privaterelay.appleid.com",
+            email_verified=True,
+            name=None,
+            provider="apple",
+        )
+    )
+
+
+@pytest.fixture
 def google_verifier() -> FakeOidcVerifier:
     return FakeOidcVerifier(
         OidcIdentity(
@@ -97,6 +115,7 @@ async def container(
     api_settings: Settings,
     email_sender: CapturingEmailSender,
     google_verifier: FakeOidcVerifier,
+    apple_verifier: FakeOidcVerifier,
     llm_gateway: ScriptedGateway,
 ) -> AsyncIterator[AppContainer]:
     clock = SystemClock()
@@ -125,7 +144,7 @@ async def container(
         breach_checker=FakeBreachChecker({"leaked-passphrase-alpha"}),
         oidc_verifiers={
             AuthProvider.GOOGLE: google_verifier,
-            AuthProvider.APPLE: FakeOidcVerifier(),
+            AuthProvider.APPLE: apple_verifier,
         },
         token_issuer=TokenIssuer(jwt_service, api_settings, clock),
         llm_gateway=llm_gateway,

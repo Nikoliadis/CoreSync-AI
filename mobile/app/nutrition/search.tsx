@@ -148,7 +148,7 @@ export default function FoodSearchScreen() {
             <View style={styles.centre}>
               <Text tone="secondary">
                 {query.length > 0
-                  ? "Nothing matched. Try a shorter word."
+                  ? t("exercises.nothingMatched")
                   : t("nutrition.nothingLogged")}
               </Text>
             </View>
@@ -224,7 +224,7 @@ function PortionScreen({
           onChangeText={setQuantity}
           keyboardType="decimal-pad"
           selectTextOnFocus
-          accessibilityLabel="Amount"
+          accessibilityLabel={t("nutrition.amount")}
           style={[styles.amount, { color: theme.text, backgroundColor: theme.surfaceWell }]}
         />
 

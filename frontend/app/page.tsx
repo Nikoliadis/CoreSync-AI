@@ -119,6 +119,9 @@ export default function LandingPage() {
       <footer className="border-t border-border">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-4 py-8 text-caption text-text-muted lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <p>© {new Date().getFullYear()} CoreSync</p>
+          <Link href="/privacy" className="underline underline-offset-4 hover:text-text">
+            Privacy policy
+          </Link>
           {/* The product-wide rule, stated where anyone can see it (docs/09 §10). */}
           <p>Coaching guidance, not medical advice.</p>
         </div>

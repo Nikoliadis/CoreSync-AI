@@ -75,7 +75,7 @@ export default function SessionDetailScreen() {
         <Card style={styles.totals}>
           <Total label={t("workouts.sets")} value={String(workout.totalSets)} />
           <Total label={t("workouts.reps")} value={String(workout.totalReps)} />
-          <Total label="Volume" value={volume(workout.totalVolumeKg)} />
+          <Total label={t("history.volume")} value={volume(workout.totalVolumeKg)} />
         </Card>
 
         {workout.notes ? (

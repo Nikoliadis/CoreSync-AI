@@ -144,7 +144,7 @@ export default function ExercisePickerScreen() {
         <View style={[styles.notice, { backgroundColor: theme.surfaceWell }]}>
           <CloudOff size={14} color={theme.textMuted} />
           <Text variant="caption" tone="muted">
-            Offline — showing exercises you have loaded before.
+            {t("exercises.offlineCached")}
           </Text>
         </View>
       )}

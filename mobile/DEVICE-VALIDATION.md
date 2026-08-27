@@ -311,6 +311,91 @@ FROM user_devices ORDER BY created_at DESC LIMIT 3;"
 - [ ] Turning notifications on in iOS/Android settings and reopening the app registers
       the device
 
+### Sign in with Apple — iOS device only
+
+**Prerequisites.** None of this can pass without an Apple Developer configuration:
+
+1. The **Sign in with Apple** capability enabled for `ai.coresync.app` in the developer
+   portal, and a provisioning profile that includes it.
+2. Backend `APPLE_BUNDLE_ID=ai.coresync.app` — the native token's `aud` is the bundle id,
+   not the web Services ID. Without it every sign-in is refused as an invalid token.
+3. A real iOS device or a simulator signed into an Apple ID. The button does not render
+   otherwise, by design.
+
+- [ ] Login screen shows Apple's own **Sign in with Apple** button below the password form
+- [ ] The button is black in light mode and white in dark mode
+- [ ] The "or" divider appears with it, and both are **absent on Android**
+- [ ] The same button appears on the Register screen
+
+**New user.**
+
+- [ ] Tap it — the native sheet appears
+- [ ] Choose **Share My Email**, continue — the app lands on the tabs, signed in
+- [ ] Profile shows the name Apple was asked to share
+
+```bash
+docker exec coresync-postgres-1 psql -U coresync -d coresync -c "
+SELECT u.email, p.display_name, ai.provider
+FROM users u
+LEFT JOIN profiles p ON p.user_id = u.id
+LEFT JOIN auth_identities ai ON ai.user_id = u.id
+ORDER BY u.created_at DESC LIMIT 3;"
+```
+
+- [ ] A row exists with provider `apple` and a display name
+
+**The name arrives once — the important one.**
+
+- [ ] Sign out, sign in with Apple again
+- [ ] Apple does **not** ask for the name this time (it never does again)
+- [ ] The display name is **still there** — it must not be blanked by the second sign-in
+
+**Hide My Email.**
+
+- [ ] Revoke the app under iOS Settings → your name → Sign in with Apple
+- [ ] Sign in again choosing **Hide My Email**
+- [ ] It succeeds, and the stored email ends in `@privaterelay.appleid.com`
+
+**Cancellation and errors.**
+
+- [ ] Tap the button, then dismiss the sheet — **no error message appears**, the screen
+      is simply unchanged
+- [ ] With the API stopped, sign in — a "no connection" message appears, not a crash
+- [ ] Nothing about the flow leaves the app signed in when it did not succeed
+
+**Coexistence — nothing else may break.**
+
+- [ ] Email + password login still works
+- [ ] Registration still works
+- [ ] Logout still works
+- [ ] Leave the app for >15 minutes after an Apple sign-in, then use it: the access token
+      refreshes silently and you are **not** signed out
+- [ ] Force-quit and reopen after an Apple sign-in — the session is restored
+
+### Crash reporting — release build only
+
+**Prerequisites.** `EXPO_PUBLIC_SENTRY_DSN` set, and a **release** build. Reporting is
+disabled in development on purpose, so none of this can be checked in Expo Go.
+
+- [ ] Source maps uploaded for the build under test, or every stack trace is minified
+- [ ] Trigger a deliberate crash in a release build
+- [ ] It appears in Sentry within a minute or two
+- [ ] The stack trace is **readable**, not minified
+- [ ] The release version matches the build
+- [ ] The environment reads `production`, not `development`
+
+**Privacy — check the payload, do not assume.**
+
+- [ ] Open the event in Sentry and read it in full
+- [ ] There is **no** weight, measurement, diary entry or coaching message anywhere in it
+- [ ] There is no email address and no display name
+- [ ] `user.id` is present and is a UUID
+- [ ] No `Authorization` header, no cookies
+- [ ] No console breadcrumbs (only navigation and lifecycle)
+
+**Only then** is the crash-free-sessions figure meaningful. Until real installs are
+reporting, that number does not exist and must not be quoted.
+
 ### Sync
 
 - [ ] **Turn airplane mode off**

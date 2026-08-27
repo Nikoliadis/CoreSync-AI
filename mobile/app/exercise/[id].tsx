@@ -93,7 +93,7 @@ export default function ExerciseDetailScreen() {
           {movement.instructions && movement.instructions.length > 0 ? (
             <Card style={styles.section}>
               <Text variant="overline" tone="muted">
-                HOW TO
+                {t("exercises.howTo")}
               </Text>
               {movement.instructions.map((step, position) => (
                 <View key={step} style={styles.step}>
@@ -111,12 +111,12 @@ export default function ExerciseDetailScreen() {
           {primary.length > 0 && (
             <Card style={styles.section}>
               <Text variant="overline" tone="muted">
-                MUSCLES
+                {t("exercises.muscles")}
               </Text>
               <Text variant="body">{primary.map((muscle) => muscle.name).join(", ")}</Text>
               {secondary.length > 0 && (
                 <Text variant="caption" tone="muted">
-                  Also: {secondary.map((muscle) => muscle.name).join(", ")}
+                  {t("exercises.alsoWorks", { muscles: secondary.map((m) => m.name).join(", ") })}
                 </Text>
               )}
             </Card>

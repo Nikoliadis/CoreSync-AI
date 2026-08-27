@@ -21,6 +21,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 import { storage } from "@/lib/storage";
 
+import { el } from "./el";
 import { en } from "./en";
 
 export type Locale = "en" | "el";
@@ -34,10 +35,11 @@ export type Messages = Record<MessageKey, string>;
 
 const catalogues: Record<Locale, Partial<Messages>> = {
   en,
-  // Populated when the Greek translation lands. Missing keys fall through to English
-  // rather than rendering a raw key at the user — a half-translated screen is usable,
-  // `nutrition.diary.title` is not.
-  el: {},
+  // `el` is typed as the full `Messages`, so a key added to English without a Greek
+  // translation is a compile error rather than a screen that quietly reverts to English
+  // in front of a Greek user. The runtime fallback below stays anyway: it costs nothing
+  // and covers a catalogue loaded from somewhere the type system cannot see.
+  el,
 };
 
 function detectLocale(): Locale {

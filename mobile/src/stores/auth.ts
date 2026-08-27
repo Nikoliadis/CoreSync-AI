@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 import { ApiError, api, tokenStore } from "@/lib/api/client";
 import { secureTokens } from "@/lib/auth/secure-tokens";
+import { identifyUser } from "@/lib/telemetry/crash-reporting";
 import { clearUserData } from "@/offline/database";
 
 export type AuthUser = {
@@ -19,6 +20,19 @@ type AuthState = {
   status: "restoring" | "authenticated" | "anonymous";
   restore: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
+  /**
+   * Exchange a verified provider token for a CoreSync session.
+   *
+   * The same session path as `login` on purpose: refresh, restore, logout and the token
+   * store all behave identically afterwards, because what comes back is a CoreSync token
+   * pair and nothing about the provider survives the exchange.
+   */
+  signInWithProvider: (input: {
+    provider: "apple" | "google";
+    idToken: string;
+    nonce?: string;
+    displayName?: string | null;
+  }) => Promise<void>;
   register: (input: {
     email: string;
     password: string;
@@ -53,10 +67,12 @@ export const useAuth = create<AuthState>((set) => ({
       tokenStore.set(tokens.accessToken);
       await secureTokens.setRefreshToken(tokens.refreshToken);
       const user = tokens.user ?? (await api.get<AuthUser>("/v1/users/me"));
+      identifyUser(user.id);
       set({ status: "authenticated", user });
     } catch {
       // An expired or revoked token is a logged-out user, not an error to show.
       await secureTokens.clear();
+      identifyUser(null);
       set({ status: "anonymous", user: null });
     }
   },
@@ -70,6 +86,27 @@ export const useAuth = create<AuthState>((set) => ({
     tokenStore.set(tokens.accessToken);
     await secureTokens.setRefreshToken(tokens.refreshToken);
     const user = tokens.user ?? (await api.get<AuthUser>("/v1/users/me"));
+    identifyUser(user.id);
+    set({ status: "authenticated", user });
+  },
+
+  async signInWithProvider({ provider, idToken, nonce, displayName }) {
+    const tokens = await api.post<TokenPair>(
+      `/v1/auth/oauth/${provider}`,
+      {
+        idToken,
+        nonce,
+        // Apple returns a name only on the first authorisation. Forwarding it here is
+        // the single opportunity to persist it; there is no later call that has it.
+        displayName: displayName ?? undefined,
+      },
+      { skipAuthRefresh: true },
+    );
+
+    tokenStore.set(tokens.accessToken);
+    await secureTokens.setRefreshToken(tokens.refreshToken);
+    const user = tokens.user ?? (await api.get<AuthUser>("/v1/users/me"));
+    identifyUser(user.id);
     set({ status: "authenticated", user });
   },
 
@@ -104,6 +141,7 @@ export const useAuth = create<AuthState>((set) => ({
       if (!(error instanceof ApiError)) throw error;
     }
     tokenStore.set(null);
+    identifyUser(null);
     await secureTokens.clear();
     await clearUserData();
     set({ status: "anonymous", user: null });

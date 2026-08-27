@@ -76,7 +76,7 @@ export default function AchievementsScreen() {
       >
         <View style={styles.header}>
           <Text variant="h1" style={styles.grow}>
-            Achievements
+            {t("achievements.title")}
           </Text>
           <Pressable onPress={() => router.back()} accessibilityRole="button" style={styles.close}>
             <Text tone="accent">{t("common.done")}</Text>
@@ -84,7 +84,7 @@ export default function AchievementsScreen() {
         </View>
 
         <Text variant="caption" tone="muted" tabular>
-          {earnedCount} of {totalCount} earned
+          {t("achievements.earnedOf", { earned: earnedCount, total: totalCount })}
         </Text>
 
         {groups.map(([category, items]) => (

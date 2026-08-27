@@ -145,7 +145,7 @@ export default function CoachScreen() {
       >
         <View style={[styles.header, { borderBottomColor: theme.border }]}>
           <View style={styles.grow}>
-            <Text variant="h3">Coach</Text>
+            <Text variant="h3">{t("coach.title")}</Text>
             {remaining && (
               <Text variant="caption" tone="muted">
                 {remaining}
@@ -170,10 +170,10 @@ export default function CoachScreen() {
             ) : (
               <View style={styles.empty}>
                 <Text variant="body" tone="secondary" style={styles.centred}>
-                  Ask about your training, your food, or what to do next.
+                  {t("coach.emptyPrompt")}
                 </Text>
                 <Text variant="caption" tone="muted" style={styles.centred}>
-                  The coach can see your workouts, weight and diary.
+                  {t("coach.emptyHint")}
                 </Text>
               </View>
             )
@@ -197,7 +197,7 @@ export default function CoachScreen() {
                 <View style={styles.thinking}>
                   <ActivityIndicator color={theme.textMuted} size="small" />
                   <Text variant="caption" tone="muted">
-                    Thinking…
+                    {t("coach.thinking")}
                   </Text>
                 </View>
               )}
@@ -216,9 +216,9 @@ export default function CoachScreen() {
           <TextInput
             value={draft}
             onChangeText={setDraft}
-            placeholder={exhausted ? "No messages left today" : "Ask the coach"}
+            placeholder={exhausted ? t("coach.noneLeftToday") : t("coach.askTheCoach")}
             placeholderTextColor={theme.textMuted}
-            accessibilityLabel="Message the coach"
+            accessibilityLabel={t("coach.messageLabel")}
             editable={!exhausted}
             multiline
             maxLength={2000}
@@ -228,7 +228,7 @@ export default function CoachScreen() {
             onPress={send}
             disabled={draft.trim().length === 0 || streaming || exhausted}
             accessibilityRole="button"
-            accessibilityLabel="Send"
+            accessibilityLabel={t("coach.send")}
             style={({ pressed }) => [
               styles.send,
               {
@@ -247,6 +247,7 @@ export default function CoachScreen() {
 }
 
 function Bubble({ message }: { message: CoachMessage }) {
+  const t = useTranslate();
   const theme = useTheme();
   const mine = message.role === "user";
 
@@ -268,7 +269,7 @@ function Bubble({ message }: { message: CoachMessage }) {
           <View style={styles.safety}>
             <ShieldAlert size={14} color={theme.textMuted} />
             <Text variant="caption" tone="muted">
-              Support, not coaching
+              {t("coach.supportNotCoaching")}
             </Text>
           </View>
         )}

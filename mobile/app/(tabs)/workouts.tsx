@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { ChevronRight, Plus, Trophy } from "lucide-react-native";
+import { CalendarDays, ChevronRight, Plus, Trophy } from "lucide-react-native";
 import { ActivityIndicator, Pressable, SectionList, StyleSheet, View } from "react-native";
 
 import { Button } from "@/components/ui/button";
@@ -125,9 +125,20 @@ export default function WorkoutsScreen() {
               </View>
             )}
 
-            <Text variant="overline" tone="muted" style={styles.historyHead}>
-              {t("workouts.history").toUpperCase()}
-            </Text>
+            <View style={styles.sectionHead}>
+              <Text variant="overline" tone="muted" style={styles.historyHead}>
+                {t("workouts.history").toUpperCase()}
+              </Text>
+              <Pressable
+                onPress={() => router.push("/workout/calendar")}
+                accessibilityRole="button"
+                accessibilityLabel={t("calendar.title")}
+                hitSlop={8}
+                style={styles.addRoutine}
+              >
+                <CalendarDays size={18} color={theme.textMuted} />
+              </Pressable>
+            </View>
           </View>
         }
         ListEmptyComponent={

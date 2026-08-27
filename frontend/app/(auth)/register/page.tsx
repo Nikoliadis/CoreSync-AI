@@ -126,7 +126,19 @@ export default function RegisterPage() {
               {...register("acceptedTerms")}
             />
             <span>
-              I accept the terms of service and privacy policy.
+              {/* Linked, and opening in a new tab so reading it does not discard a
+                  half-filled form. Asking somebody to accept a document they cannot
+                  open is not consent. */}
+              I accept the terms of service and{" "}
+              <Link
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent-text underline underline-offset-4"
+              >
+                privacy policy
+              </Link>
+              .
             </span>
           </label>
           {errors.acceptedTerms && (

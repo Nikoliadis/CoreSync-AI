@@ -21,7 +21,15 @@ import { useTranslate } from "@/lib/i18n";
 import { useAuth } from "@/stores/auth";
 import { radius, space, useTheme } from "@/theme";
 
-const PRIVACY_POLICY_URL = "https://coresync.app/privacy";
+/**
+ * The public policy page, served by the web app at `/privacy`.
+ *
+ * Configurable because the host differs per environment, and a staging build that opens
+ * the production policy is showing the wrong document. Falls back to the production URL
+ * so a build with no web URL configured still reaches something real rather than
+ * nothing at all.
+ */
+const PRIVACY_POLICY_URL = `${process.env.EXPO_PUBLIC_WEB_URL ?? "https://coresync.app"}/privacy`;
 
 /**
  * Units, privacy, data, and the way out.
@@ -56,9 +64,8 @@ export default function SettingsScreen() {
 
   const confirmDelete = () => {
     Alert.alert(
-      "Delete your account?",
-      "You will be signed out everywhere immediately. Your data is kept for 30 days — " +
-        "sign in again within that time to cancel. After 30 days it is erased permanently.",
+      t("settings.deleteTitle"),
+      t("settings.deleteBody"),
       [
         { text: t("common.cancel"), style: "cancel" },
         {
@@ -71,7 +78,7 @@ export default function SettingsScreen() {
                 const result = await settingsApi.deleteAccount();
                 // Stated with the actual date rather than a vague reassurance: the grace
                 // period is the difference between reversible and not.
-                Alert.alert("Account scheduled for deletion", result.message, [
+                Alert.alert(t("settings.deleteScheduled"), result.message, [
                   { text: "OK", onPress: () => void logout() },
                 ]);
               } catch (error) {
@@ -101,7 +108,7 @@ export default function SettingsScreen() {
     <Screen edges={["top"]} padded={false}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <Text variant="h3" style={styles.grow}>
-          Settings
+          {t("settings.title")}
         </Text>
         <Pressable onPress={() => router.back()} accessibilityRole="button" style={styles.close}>
           <Text tone="accent">{t("common.done")}</Text>
@@ -111,13 +118,13 @@ export default function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Card style={styles.card}>
           <Text variant="overline" tone="muted">
-            UNITS
+            {t("settings.units")}
           </Text>
           <View style={styles.chips}>
             {(["metric", "imperial"] as const).map((option) => (
               <Chip
                 key={option}
-                label={option === "metric" ? "Metric (kg, cm)" : "Imperial (lb, ft)"}
+                label={option === "metric" ? t("settings.metric") : t("settings.imperial")}
                 active={settings.unitSystem === option}
                 onPress={() => update.mutate({ unitSystem: option })}
               />
@@ -127,17 +134,17 @@ export default function SettingsScreen() {
 
         <Card style={styles.card}>
           <Text variant="overline" tone="muted">
-            PRIVACY
+            {t("settings.privacy")}
           </Text>
           <Row
-            label="Improve the coach"
-            detail="Allow your anonymised conversations to improve the model. Off by default."
+            label={t("settings.improveCoach")}
+            detail={t("settings.improveCoachDetail")}
             value={settings.aiTrainingOptIn}
             onChange={(value) => update.mutate({ aiTrainingOptIn: value })}
           />
           <Row
-            label="Product emails"
-            detail="Occasional updates. Not required for account messages."
+            label={t("settings.productEmails")}
+            detail={t("settings.productEmailsDetail")}
             value={settings.marketingEmailOptIn}
             onChange={(value) => update.mutate({ marketingEmailOptIn: value })}
           />
@@ -147,14 +154,14 @@ export default function SettingsScreen() {
             style={styles.link}
           >
             <Text variant="caption" tone="accent">
-              Privacy policy
+              {t("settings.privacyPolicy")}
             </Text>
           </Pressable>
         </Card>
 
         <Card style={styles.card}>
           <Text variant="overline" tone="muted">
-            ACCOUNT
+            {t("settings.account")}
           </Text>
           <Text variant="caption" tone="muted">
             {me.data?.user.email}
@@ -169,11 +176,11 @@ export default function SettingsScreen() {
             onPress={confirmDelete}
             disabled={deleting}
             accessibilityRole="button"
-            accessibilityLabel="Delete your account"
+            accessibilityLabel={t("settings.deleteAccountLabel")}
             style={styles.danger}
           >
             <Text variant="caption" style={{ color: theme.critical }}>
-              {deleting ? "Working…" : "Delete account"}
+              {deleting ? t("settings.working") : t("settings.deleteAccount")}
             </Text>
           </Pressable>
         </Card>

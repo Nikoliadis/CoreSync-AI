@@ -67,7 +67,7 @@ export default function MeasurementsScreen() {
       // Silently dropping an unparseable entry would record a measurement session that
       // is missing the one site the user came to log.
       if (!Number.isFinite(parsed) || parsed <= 0) {
-        Alert.alert("Check that value", `"${SITE_LABELS[site]}" is not a number.`);
+        Alert.alert(t("progress.checkValue"), t("progress.notANumber"));
         return;
       }
       payload[site] = parsed;
@@ -99,7 +99,7 @@ export default function MeasurementsScreen() {
             <Text tone="accent">{t("common.cancel")}</Text>
           </Pressable>
           <Text variant="h3" style={styles.title} numberOfLines={1}>
-            Measurements
+            {t("progress.measurements")}
           </Text>
           <Pressable
             onPress={() => void onSave()}
@@ -114,7 +114,7 @@ export default function MeasurementsScreen() {
 
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text variant="caption" tone="muted">
-            Fill in only what you measured. Anything left blank keeps its last value.
+            {t("progress.onlyWhatYouMeasured")}
           </Text>
 
           <Card style={styles.card}>
@@ -130,7 +130,7 @@ export default function MeasurementsScreen() {
                   selectTextOnFocus
                   placeholder={latest[site] ? Number(latest[site]).toFixed(1) : "—"}
                   placeholderTextColor={theme.textMuted}
-                  accessibilityLabel={`${SITE_LABELS[site]} in centimetres`}
+                  accessibilityLabel={t("progress.centimetres", { name: SITE_LABELS[site] })}
                   style={[
                     styles.field,
                     { color: theme.text, backgroundColor: theme.surfaceWell },

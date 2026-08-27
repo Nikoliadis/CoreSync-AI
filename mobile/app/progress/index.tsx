@@ -43,6 +43,7 @@ const RANGES = [
  * they are wondering whether a programme is doing anything.
  */
 export default function ProgressScreen() {
+  const t = useTranslate();
   const theme = useTheme();
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -85,7 +86,7 @@ export default function ProgressScreen() {
           />
         }
       >
-        <Text variant="h1">Progress</Text>
+        <Text variant="h1">{t("progress.title")}</Text>
 
         <Card style={styles.section}>
           <View style={styles.sectionHead}>
@@ -129,7 +130,7 @@ export default function ProgressScreen() {
                       : "—"}
                 </Text>
                 <Text variant="caption" tone="muted">
-                  kg trend
+                  {t("progress.kgTrend")}
                 </Text>
                 <Text
                   variant="caption"
@@ -157,7 +158,7 @@ export default function ProgressScreen() {
                     // No date, because projecting one from a trend heading the wrong way
                     // would be arithmetic dressed up as encouragement.
                     <Text variant="caption" tone="muted">
-                      The trend is moving away from your target.
+                      {t("progress.movingAway")}
                     </Text>
                   )}
 
@@ -174,7 +175,7 @@ export default function ProgressScreen() {
             <Pressable
               onPress={() => router.push("/progress/measurements")}
               accessibilityRole="button"
-              accessibilityLabel="Record measurements"
+              accessibilityLabel={t("progress.recordMeasurements")}
               hitSlop={8}
             >
               <Plus size={18} color={theme.accentText} />
@@ -185,7 +186,7 @@ export default function ProgressScreen() {
             <ActivityIndicator color={theme.textMuted} style={styles.spinner} />
           ) : (measurements.data?.trends ?? []).length === 0 ? (
             <Text variant="caption" tone="secondary">
-              Nothing recorded yet. Waist and arms are the two most people track.
+              {t("progress.nothingRecorded")}
             </Text>
           ) : (
             (measurements.data?.trends ?? []).map((trend) => (
@@ -207,7 +208,7 @@ export default function ProgressScreen() {
 
         <Card style={styles.section}>
           <Text variant="overline" tone="muted">
-            VOLUME BY MUSCLE GROUP
+            {t("progress.volumeByMuscle")}
           </Text>
           {volume.isLoading ? (
             <ActivityIndicator color={theme.textMuted} style={styles.spinner} />
@@ -251,9 +252,9 @@ function LogWeightRow() {
         value={value}
         onChangeText={setValue}
         keyboardType="decimal-pad"
-        placeholder="Today's weight"
+        placeholder={t("progress.todaysWeight")}
         placeholderTextColor={theme.textMuted}
-        accessibilityLabel="Today's weight in kilograms"
+        accessibilityLabel={t("progress.todaysWeightLabel")}
         style={[styles.weightField, { color: theme.text, backgroundColor: theme.surfaceWell }]}
       />
       <Button
@@ -274,6 +275,7 @@ function LogWeightRow() {
  * the labels need.
  */
 function VolumeBreakdown({ buckets }: { buckets: readonly { volumeByMuscleGroup: Record<string, string> }[] }) {
+  const t = useTranslate();
   const theme = useTheme();
 
   const totals = new Map<string, number>();
@@ -288,7 +290,7 @@ function VolumeBreakdown({ buckets }: { buckets: readonly { volumeByMuscleGroup:
   if (ranked.length === 0) {
     return (
       <Text variant="caption" tone="secondary">
-        No completed workouts in this period.
+        {t("progress.noCompletedWorkouts")}
       </Text>
     );
   }

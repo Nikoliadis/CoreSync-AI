@@ -66,13 +66,13 @@ export default function ProfileEditScreen() {
     if (saving) return;
     const name = displayName.trim();
     if (name.length === 0) {
-      Alert.alert("Name required", "Your display name cannot be empty.");
+      Alert.alert(t("profileEdit.nameRequired"), t("profileEdit.nameEmpty"));
       return;
     }
 
     const parsedHeight = height.trim() === "" ? null : Number(height.replace(",", "."));
     if (parsedHeight !== null && (!Number.isFinite(parsedHeight) || parsedHeight <= 0)) {
-      Alert.alert("Check your height", "That is not a number.");
+      Alert.alert(t("profileEdit.checkHeight"), t("profileEdit.heightNotANumber"));
       return;
     }
 
@@ -121,7 +121,7 @@ export default function ProfileEditScreen() {
             <Text tone="accent">{t("common.cancel")}</Text>
           </Pressable>
           <Text variant="h3" style={styles.title}>
-            Profile
+            {t("profileEdit.title")}
           </Text>
           <Pressable
             onPress={() => void onSave()}
@@ -137,13 +137,13 @@ export default function ProfileEditScreen() {
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Card style={styles.card}>
             <Field
-              label="Display name"
+              label={t("profileEdit.displayName")}
               value={displayName}
               onChangeText={setDisplayName}
-              placeholder="Your name"
+              placeholder={t("profileEdit.yourName")}
             />
             <Field
-              label="Height"
+              label={t("profileEdit.height")}
               value={height}
               onChangeText={setHeight}
               placeholder="—"
@@ -154,10 +154,10 @@ export default function ProfileEditScreen() {
 
           <Card style={styles.card}>
             <Text variant="overline" tone="muted">
-              ACTIVITY
+              {t("profileEdit.activity")}
             </Text>
             <Text variant="caption" tone="muted">
-              How much you move outside training. This feeds your calorie targets.
+              {t("profileEdit.activityDetail")}
             </Text>
             <View style={styles.chips}>
               {ACTIVITY_LEVELS.map((level) => (
@@ -173,7 +173,7 @@ export default function ProfileEditScreen() {
 
           <Card style={styles.card}>
             <Text variant="overline" tone="muted">
-              EXPERIENCE
+              {t("profileEdit.experience")}
             </Text>
             <View style={styles.chips}>
               {EXPERIENCE_LEVELS.map((level) => (
@@ -189,14 +189,14 @@ export default function ProfileEditScreen() {
 
           <Card style={styles.card}>
             <Text variant="overline" tone="muted">
-              BIO
+              {t("profileEdit.bio")}
             </Text>
             <TextInput
               value={bio}
               onChangeText={setBio}
-              placeholder="Optional"
+              placeholder={t("profileEdit.optional")}
               placeholderTextColor={theme.textMuted}
-              accessibilityLabel="Bio"
+              accessibilityLabel={t("profileEdit.bio")}
               multiline
               maxLength={500}
               style={[styles.bio, { color: theme.text, backgroundColor: theme.surfaceWell }]}

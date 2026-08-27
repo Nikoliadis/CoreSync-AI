@@ -3,6 +3,14 @@
 // mints an id before anything else happens.
 import "expo-crypto";
 
+// Second, and deliberately out of alphabetical order: a crash during startup is exactly
+// what this needs to catch, so it has to be initialised before any other module gets the
+// chance to throw while loading.
+// eslint-disable-next-line import/order
+import { initCrashReporting, withCrashReporting } from "@/lib/telemetry/crash-reporting";
+
+initCrashReporting();
+
 import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import * as Notifications from "expo-notifications";
 import { Stack, useRouter, useSegments } from "expo-router";
@@ -29,7 +37,7 @@ void SplashScreen.preventAutoHideAsync();
 
 const PERSISTED_KEYS = ["coresync.theme", "coresync.locale"] as const;
 
-export default function RootLayout() {
+function RootLayout() {
   const queryClient = useMemo(createQueryClient, []);
   const [ready, setReady] = useState(false);
   const restore = useAuth((state) => state.restore);
@@ -198,3 +206,12 @@ function AuthGate() {
     </Stack>
   );
 }
+
+/**
+ * Wrapped so uncaught errors and native crashes are reported.
+ *
+ * A no-op when reporting is disabled, which is every development run — the wrapper is
+ * applied unconditionally so the production and development trees stay identical in
+ * shape, and a bug cannot hide behind "only happens in the wrapped build".
+ */
+export default withCrashReporting(RootLayout);

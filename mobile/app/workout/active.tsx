@@ -184,8 +184,8 @@ export default function ActiveWorkoutScreen() {
       return;
     }
     Alert.alert(
-      "Discard this workout?",
-      `${logged} ${logged === 1 ? "set" : "sets"} will be deleted. This cannot be undone.`,
+      t("active.discardTitle"),
+      t("active.discardBody", { count: logged }),
       [
         { text: t("common.cancel"), style: "cancel" },
         {
@@ -238,7 +238,7 @@ export default function ActiveWorkoutScreen() {
           </Text>
         </View>
         <IconAction
-          label={isPaused ? "Resume the workout" : "Pause the workout"}
+          label={isPaused ? t("active.resume") : t("active.pause")}
           onPress={() =>
             void apply((current) =>
               current.pausedAt ? resumeSession(current) : pauseSession(current),
@@ -265,11 +265,11 @@ export default function ActiveWorkoutScreen() {
         <Pressable
           onPress={() => void apply((current) => resumeSession(current))}
           accessibilityRole="button"
-          accessibilityLabel="Resume the workout"
+          accessibilityLabel={t("active.resume")}
           style={[styles.paused, { backgroundColor: theme.surfaceWell }]}
         >
           <Text variant="caption" tone="accent">
-            Paused — tap to resume
+            {t("active.paused")}
           </Text>
         </Pressable>
       )}
@@ -426,8 +426,8 @@ function ExerciseCard({
       return;
     }
     Alert.alert(
-      `Remove ${exercise.exerciseName}?`,
-      `${logged} logged ${logged === 1 ? "set" : "sets"} will be deleted.`,
+      t("active.removeTitle", { name: exercise.exerciseName }),
+      t("active.removeBody", { count: logged }),
       [
         { text: t("common.cancel"), style: "cancel" },
         {
@@ -454,20 +454,20 @@ function ExerciseCard({
           {exercise.exerciseName}
         </Text>
         <IconAction
-          label={`Move ${exercise.exerciseName} up`}
+          label={t("active.moveUp", { name: exercise.exerciseName })}
           disabled={isFirst}
           onPress={() => void apply((current) => moveExercise(current, exercise.id, -1))}
         >
           <ChevronUp size={18} color={theme.textMuted} />
         </IconAction>
         <IconAction
-          label={`Move ${exercise.exerciseName} down`}
+          label={t("active.moveDown", { name: exercise.exerciseName })}
           disabled={isLast}
           onPress={() => void apply((current) => moveExercise(current, exercise.id, 1))}
         >
           <ChevronDown size={18} color={theme.textMuted} />
         </IconAction>
-        <IconAction label={`Remove ${exercise.exerciseName}`} onPress={onRemove}>
+        <IconAction label={t("active.remove", { name: exercise.exerciseName })} onPress={onRemove}>
           <Trash2 size={18} color={theme.textMuted} />
         </IconAction>
       </View>

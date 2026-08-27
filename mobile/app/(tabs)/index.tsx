@@ -185,7 +185,7 @@ export default function HomeScreen() {
                 style={styles.insightAction}
               >
                 <Text variant="caption" tone="accent">
-                  Helpful
+                  {t("coach.helpful")}
                 </Text>
               </Pressable>
               <Pressable
@@ -198,7 +198,7 @@ export default function HomeScreen() {
                 style={styles.insightAction}
               >
                 <Text variant="caption" tone="muted">
-                  Dismiss
+                  {t("coach.dismiss")}
                 </Text>
               </Pressable>
             </View>
@@ -206,7 +206,7 @@ export default function HomeScreen() {
         ))}
 
         <Button
-          label="Ask the coach"
+          label={t("coach.askTheCoach")}
           variant="secondary"
           onPress={() => router.push("/coach")}
         />
