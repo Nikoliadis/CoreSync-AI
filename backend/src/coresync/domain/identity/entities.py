@@ -279,24 +279,70 @@ class SingleUseToken:
         self.used_at = now
 
 
+PLATFORMS = ("ios", "android", "web")
+
+
 @dataclass(slots=True)
 class UserDevice:
+    """An installation that can receive a push notification.
+
+    ``is_active`` and a present ``push_token`` are both required for delivery. They mean
+    different things: a null token is a device that registered before it had one, while
+    an inactive device had a token that the provider has since told us is dead — the app
+    was uninstalled, permission was revoked, or the OS rotated it.
+    """
+
     id: UUID
     user_id: UUID
     platform: str
     device_name: str | None = None
     push_token: str | None = None
     last_seen_at: datetime | None = None
+    is_active: bool = True
     fields_: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def create(
-        cls, *, user_id: UUID, platform: str, device_name: str | None, now: datetime
+        cls,
+        *,
+        user_id: UUID,
+        platform: str,
+        device_name: str | None,
+        now: datetime,
+        push_token: str | None = None,
     ) -> UserDevice:
+        if platform not in PLATFORMS:
+            raise ValueError(f"unknown platform '{platform}'")
         return cls(
             id=uuid7(),
             user_id=user_id,
             platform=platform,
             device_name=device_name,
+            push_token=push_token,
             last_seen_at=now,
         )
+
+    @property
+    def is_deliverable(self) -> bool:
+        return self.is_active and bool(self.push_token)
+
+    def register_token(self, token: str, *, now: datetime) -> None:
+        """Adopt a token, reactivating the device.
+
+        Reactivation is the point. A device deactivated because its token died comes back
+        the moment the app runs again and produces a new one, and leaving it inactive
+        would mean push silently never resumes for someone who reinstalled.
+        """
+        self.push_token = token
+        self.is_active = True
+        self.last_seen_at = now
+
+    def deactivate(self) -> None:
+        """Stop sending here.
+
+        The token is cleared as well as the flag: keeping a string the provider has
+        rejected invites a later retry from sending to it again, and the unique index
+        would then block a genuine re-registration of the same token elsewhere.
+        """
+        self.push_token = None
+        self.is_active = False

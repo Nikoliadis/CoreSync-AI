@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
 
+from coresync.application.identity.devices import (
+    ListDevicesUseCase,
+    RegisterDeviceCommand,
+    RegisterDeviceUseCase,
+    UnregisterDeviceUseCase,
+    UnregisterTokenUseCase,
+)
 from coresync.application.profile.use_cases import (
     CompleteOnboardingCommand,
     CompleteOnboardingUseCase,
@@ -25,15 +33,18 @@ from coresync.presentation import dependencies as deps
 from coresync.presentation.schemas.common import ErrorResponse
 from coresync.presentation.schemas.users import (
     AccountDeletionResponse,
+    DeviceResponse,
     GoalResponse,
     MeResponse,
     NutritionTargetResponse,
     OnboardingRequest,
     ProfileResponse,
+    RegisterDeviceRequest,
     SetGoalRequest,
     SetTargetsRequest,
     SettingsResponse,
     TargetCalculationResponse,
+    UnregisterTokenRequest,
     UpdateProfileRequest,
     UpdateSettingsRequest,
 )
@@ -237,3 +248,78 @@ async def delete_account(
             f"{scheduled_for.isoformat()} to cancel."
         ),
     )
+
+
+# --------------------------------------------------------------------- devices
+@router.post(
+    "/me/devices",
+    response_model=DeviceResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={400: {"model": ErrorResponse}},
+    summary="Register this device for push notifications",
+    description=(
+        "Idempotent on the push token, which the app re-sends on every launch. "
+        "A token that already belongs to another account is moved rather than "
+        "duplicated: it identifies an installation, and leaving it on the previous "
+        "user would deliver their notifications to whoever holds the phone now."
+    ),
+)
+async def register_device(
+    body: RegisterDeviceRequest,
+    user: deps.CurrentUser,
+    use_case: Annotated[RegisterDeviceUseCase, Depends(deps.register_device_use_case)],
+) -> DeviceResponse:
+    device = await use_case.execute(
+        RegisterDeviceCommand(
+            user_id=user.id,
+            platform=body.platform,
+            push_token=body.push_token,
+            device_name=body.device_name,
+        )
+    )
+    return DeviceResponse.model_validate(device)
+
+
+@router.get(
+    "/me/devices",
+    response_model=list[DeviceResponse],
+    summary="Devices registered to you",
+)
+async def list_devices(
+    user: deps.CurrentUser,
+    use_case: Annotated[ListDevicesUseCase, Depends(deps.list_devices_use_case)],
+) -> list[DeviceResponse]:
+    devices = await use_case.execute(user.id)
+    return [DeviceResponse.model_validate(device) for device in devices]
+
+
+@router.delete(
+    "/me/devices/{device_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={404: {"model": ErrorResponse}},
+    summary="Remove a device",
+)
+async def unregister_device(
+    device_id: UUID,
+    user: deps.CurrentUser,
+    use_case: Annotated[UnregisterDeviceUseCase, Depends(deps.unregister_device_use_case)],
+) -> None:
+    await use_case.execute(user.id, device_id)
+
+
+@router.post(
+    "/me/devices/unregister",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove the device holding this token",
+    description=(
+        "For sign-out, where the app knows its token but not its device id. Silent when "
+        "the token is unknown or belongs to someone else — signing out must not fail, "
+        "and the answer would confirm the existence of another user's device."
+    ),
+)
+async def unregister_token(
+    body: UnregisterTokenRequest,
+    user: deps.CurrentUser,
+    use_case: Annotated[UnregisterTokenUseCase, Depends(deps.unregister_token_use_case)],
+) -> None:
+    await use_case.execute(user.id, body.push_token)

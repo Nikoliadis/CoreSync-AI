@@ -146,3 +146,30 @@ class SetTargetsRequest(ApiModel):
     fat_g: Decimal = Field(ge=0, le=400)
     fiber_g: Decimal | None = Field(default=None, ge=0, le=200)
     water_ml: Decimal | None = Field(default=None, ge=500, le=10000)
+
+
+# --------------------------------------------------------------------- devices
+class RegisterDeviceRequest(ApiModel):
+    """A push token, and enough context to tell one device from another in a list."""
+
+    platform: Literal["ios", "android", "web"]
+    push_token: str = Field(
+        min_length=1,
+        max_length=512,
+        description="The provider's token for this installation. Not a secret, but not shared.",
+    )
+    device_name: str | None = Field(default=None, max_length=120)
+
+
+class UnregisterTokenRequest(ApiModel):
+    push_token: str = Field(min_length=1, max_length=512)
+
+
+class DeviceResponse(ApiModel):
+    id: UUID
+    platform: str
+    device_name: str | None
+    is_active: bool
+    # The token itself is never returned. Listing devices is for recognising them, and
+    # echoing a delivery address back over the wire earns nothing.
+    has_push_token: bool

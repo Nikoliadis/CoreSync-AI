@@ -16,13 +16,22 @@
       "bundleIdentifier": "ai.coresync.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Scan barcodes to log packaged foods.",
-        "NSPhotoLibraryUsageDescription": "Attach progress photos to your history."
+        "NSPhotoLibraryUsageDescription": "Attach progress photos to your history.",
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       }
     },
     "android": {
       "package": "ai.coresync.app",
-      "adaptiveIcon": { "backgroundColor": "#0a0a0b" },
-      "permissions": ["CAMERA"]
+      "adaptiveIcon": {
+        "backgroundColor": "#0a0a0b"
+      },
+      "permissions": [
+        "CAMERA",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -32,10 +41,21 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#0a0a0b",
-          "dark": { "backgroundColor": "#0a0a0b" }
+          "dark": {
+            "backgroundColor": "#0a0a0b"
+          }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#c8ff3d",
+          "defaultChannel": "workout_reminder"
         }
       ]
     ],
-    "experiments": { "typedRoutes": true }
+    "experiments": {
+      "typedRoutes": true
+    }
   }
 }

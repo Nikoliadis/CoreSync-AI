@@ -83,18 +83,24 @@ class GoogleOidcVerifier:
 class AppleOidcVerifier:
     """Apple Sign In.
 
-    Two behaviours worth knowing about, both of which cause bugs if ignored:
-    the user's name is returned only on the *first* authorisation and never again, and
+    Three behaviours worth knowing about, all of which cause bugs if ignored:
+    the user's name is returned only on the *first* authorisation and never again;
     "Hide My Email" yields a `@privaterelay.appleid.com` address that only delivers if
-    the sending domain is registered with Apple.
+    the sending domain is registered with Apple; and the `aud` claim differs by platform,
+    which is why two audiences are accepted rather than one.
     """
 
     def __init__(self, settings: Settings) -> None:
-        self._service_id = settings.apple_service_id
+        # Both audiences, because Apple issues a different one per platform: the web flow
+        # gets the Services ID and a native iOS app gets its bundle identifier. Accepting
+        # only one silently rejects every sign-in from the other.
+        self._audiences = [
+            value for value in (settings.apple_service_id, settings.apple_bundle_id) if value
+        ]
         self._jwks = _JwksCache(APPLE_JWKS_URL)
 
     async def verify(self, id_token: str, *, nonce: str | None = None) -> OidcIdentity:
-        if not self._service_id:
+        if not self._audiences:
             raise InvalidTokenError("Apple sign-in is not configured")
 
         key = self._jwks.signing_key(id_token)
@@ -103,7 +109,7 @@ class AppleOidcVerifier:
                 id_token,
                 key,
                 algorithms=["RS256"],
-                audience=self._service_id,
+                audience=self._audiences,
                 issuer=APPLE_ISSUER,
                 options={"require": ["exp", "iat", "sub", "aud", "iss"]},
             )

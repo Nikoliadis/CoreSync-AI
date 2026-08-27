@@ -63,6 +63,12 @@ from coresync.application.identity.auth import (
     RotateRefreshTokenUseCase,
     TokenIssuer,
 )
+from coresync.application.identity.devices import (
+    ListDevicesUseCase,
+    RegisterDeviceUseCase,
+    UnregisterDeviceUseCase,
+    UnregisterTokenUseCase,
+)
 from coresync.application.identity.oauth import (
     LinkOAuthProviderUseCase,
     OAuthSignInUseCase,
@@ -517,6 +523,22 @@ def add_session_exercise_use_case(uow: Uow) -> AddSessionExerciseUseCase:
 
 def update_session_exercise_use_case(uow: Uow) -> UpdateSessionExerciseUseCase:
     return UpdateSessionExerciseUseCase(uow)
+
+
+def register_device_use_case(c: Container, uow: Uow) -> RegisterDeviceUseCase:
+    return RegisterDeviceUseCase(uow=uow, clock=c.clock)
+
+
+def list_devices_use_case(uow: Uow) -> ListDevicesUseCase:
+    return ListDevicesUseCase(uow=uow)
+
+
+def unregister_device_use_case(uow: Uow) -> UnregisterDeviceUseCase:
+    return UnregisterDeviceUseCase(uow=uow)
+
+
+def unregister_token_use_case(uow: Uow) -> UnregisterTokenUseCase:
+    return UnregisterTokenUseCase(uow=uow)
 
 
 def remove_session_exercise_use_case(uow: Uow) -> RemoveSessionExerciseUseCase:

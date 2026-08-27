@@ -109,6 +109,29 @@ class UserDeviceRepository(Protocol):
         """Every registered device. Used to decide whether a push is deliverable."""
         ...
 
+    async def get_by_push_token(self, token: str) -> UserDevice | None:
+        """Whoever currently holds this token, regardless of user.
+
+        Needed because a token follows the *installation*, not the account: signing in as
+        somebody else on the same phone must move the token rather than leave it pointing
+        at the previous user, who would otherwise keep receiving their notifications.
+        """
+        ...
+
+    async def list_deliverable(self, user_id: UUID) -> list[UserDevice]:
+        """Active devices holding a token. What the dispatcher actually sends to."""
+        ...
+
     async def add(self, device: UserDevice) -> None: ...
+
+    async def update(self, device: UserDevice) -> None: ...
+
+    async def remove(self, device_id: UUID, user_id: UUID) -> bool:
+        """Delete one device. Returns whether it existed and belonged to the user."""
+        ...
+
+    async def deactivate_token(self, token: str) -> None:
+        """Stop sending to a token the provider has rejected."""
+        ...
 
     async def touch(self, device_id: UUID, now: datetime) -> None: ...

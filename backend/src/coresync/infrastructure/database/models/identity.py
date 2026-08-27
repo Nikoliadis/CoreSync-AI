@@ -10,6 +10,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -158,6 +159,7 @@ class UserDeviceModel(TimestampMixin, Base):
     platform: Mapped[str] = mapped_column(String(20), nullable=False)
     device_name: Mapped[str | None] = mapped_column(String(120))
     push_token: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (

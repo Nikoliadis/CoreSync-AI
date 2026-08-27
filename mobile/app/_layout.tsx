@@ -3,7 +3,8 @@
 // mints an id before anything else happens.
 import "expo-crypto";
 
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
+import * as Notifications from "expo-notifications";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
@@ -11,6 +12,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { notificationKeys } from "@/features/notifications/api";
+import { refreshRegistration, routeFromNotification } from "@/features/notifications/push";
 import { tokenStore } from "@/lib/api/client";
 import { createQueryClient } from "@/lib/api/query-client";
 import { I18nProvider } from "@/lib/i18n";
@@ -70,6 +73,7 @@ export default function RootLayout() {
             <QueryClientProvider client={queryClient}>
               <ThemedStatusBar />
               <SyncEngine />
+              <PushListeners />
               <AuthGate />
             </QueryClientProvider>
           </I18nProvider>
@@ -101,6 +105,62 @@ function SyncEngine() {
       handle.current = null;
     };
   }, [status]);
+
+  return null;
+}
+
+/**
+ * Notification listeners, and the tap that routes.
+ *
+ * Mounted only while signed in: a deep link into a workout is meaningless on the login
+ * screen, and the token refresh below needs an authenticated request to land anywhere.
+ *
+ * Two paths reach a screen. `getLastNotificationResponseAsync` covers the cold start —
+ * the app was closed and the notification is what launched it — and the subscription
+ * covers a tap while it is already running. Handling only the second is the classic
+ * omission: it works throughout development, where the app is always already open.
+ */
+function PushListeners() {
+  const status = useAuth((state) => state.status);
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+
+    // Tokens rotate on reinstall, restore and some OS updates. Registration is
+    // idempotent on the token, so re-sending it every launch is one request that stops
+    // a rotated token silently ending delivery.
+    void refreshRegistration();
+
+    let cancelled = false;
+
+    const go = (route: string | null) => {
+      if (!cancelled && route) router.push(route);
+    };
+
+    // The cold-start case: the notification launched the app.
+    void Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response) go(routeFromNotification(response));
+    });
+
+    const tapped = Notifications.addNotificationResponseReceivedListener((response) => {
+      void queryClient.invalidateQueries({ queryKey: notificationKeys.all });
+      go(routeFromNotification(response));
+    });
+
+    // Arriving while the app is open still changes the unread count, so the badge has
+    // to move even though nothing was tapped.
+    const received = Notifications.addNotificationReceivedListener(() => {
+      void queryClient.invalidateQueries({ queryKey: notificationKeys.all });
+    });
+
+    return () => {
+      cancelled = true;
+      tapped.remove();
+      received.remove();
+    };
+  }, [status, router, queryClient]);
 
   return null;
 }

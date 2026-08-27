@@ -90,6 +90,12 @@ export const useAuth = create<AuthState>((set) => ({
   },
 
   async logout() {
+    // Before the token is discarded, while the request can still authenticate. Leaving
+    // the device registered means the next notification for this account arrives on a
+    // phone that somebody else may now be signed into.
+    const { unregisterCurrentDevice } = await import("@/features/notifications/push");
+    await unregisterCurrentDevice();
+
     try {
       await api.post("/v1/auth/logout", {});
     } catch (error) {

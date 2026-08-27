@@ -190,6 +190,127 @@ GROUP BY s.id ORDER BY s.started_at DESC LIMIT 3;"
 - [ ] The other nine sites keep their previous values, they are not wiped
 - [ ] Volume by muscle group shows bars, longest first
 
+### Goals and targets
+
+- [ ] Profile tab → **Goal and daily targets**
+- [ ] Pick "Lose fat", enter a target weight and 0.5 kg/week, save
+- [ ] Daily targets appear and are plausible for your height and weight
+- [ ] Set an aggressive rate (e.g. 2 kg/week) — a warning appears *before* saving
+- [ ] Save it — if the deficit hits the safety floor, an alert says the calories were raised
+- [ ] Check the sign made it through:
+
+```bash
+docker exec coresync-postgres-1 psql -U coresync -d coresync -c "
+SELECT goal_type, target_weight_kg, weekly_rate_kg FROM goals
+WHERE ended_on IS NULL ORDER BY started_on DESC LIMIT 2;"
+```
+
+- [ ] For a fat-loss goal `weekly_rate_kg` is **negative**, not positive
+
+### Achievements
+
+- [ ] Profile tab → **Achievements**
+- [ ] Earned badges show first, most recent first
+- [ ] Unearned badges show a progress bar and "7 of 10", **not** a bare padlock
+- [ ] Within a category, the closest unearned badge is above the furthest
+
+### AI coach
+
+- [ ] Home → **Ask the coach**
+- [ ] Send a message — your own words appear immediately
+- [ ] The reply **streams in word by word**, it does not appear all at once after a pause
+- [ ] Ask something long enough to produce a multi-paragraph reply
+- [ ] **No sentence is missing from the middle** of it (this is the frame-splitting bug)
+- [ ] Send, then immediately tap Done — no crash, and the request stops
+- [ ] With the API stopped, sending shows "No connection", not a spinner forever
+- [ ] Coach insights appear on Home; Helpful / Dismiss both make them go away
+
+### Notifications
+
+- [ ] Home shows a bell; with unread items it carries a badge
+- [ ] Tap it — the list shows unread items highlighted
+- [ ] Tap one — it stops looking unread immediately and follows its link
+- [ ] **Mark all as read** clears the badge
+- [ ] Open notification settings, turn off one category, leave the app and return
+- [ ] That category is **still off** (the toggle persisted)
+- [ ] Turn on quiet hours 22:00–07:00, then set it back to Off — it clears
+
+### Settings, profile, account
+
+- [ ] Profile tab → your name → the editor opens
+- [ ] Change your height and save
+- [ ] Goals screen now shows targets recalculated from the new height
+- [ ] Settings → switch to Imperial — height reads as feet and inches
+- [ ] **It never reads 5'12"** (should be 6'0")
+- [ ] Privacy policy link opens
+- [ ] "Improve the coach" is **off** by default
+- [ ] Tap **Delete account** — the dialog states the 30-day grace period explicitly
+- [ ] Cancel it — nothing happens
+- [ ] (On a throwaway account only) Confirm it — you are signed out everywhere
+
+```bash
+docker exec coresync-postgres-1 psql -U coresync -d coresync -c "
+SELECT email, deleted_at FROM users ORDER BY created_at DESC LIMIT 3;"
+```
+
+- [ ] The deleted account has a `deleted_at`, and the row still exists (grace period)
+
+### Push notifications — device only
+
+**Prerequisites.** Push cannot work until both are true:
+
+1. `eas init` has been run so `expo.extra.eas.projectId` exists (or `EXPO_PUBLIC_PROJECT_ID`
+   is set). Without it no token can be minted and nothing below will pass.
+2. The API worker runs with `PUSH_ENABLED=true`.
+
+- [ ] Profile → Settings → Notifications: a **Turn on notifications** card is shown
+- [ ] It explains *what* the notifications are before asking — the OS prompt has **not**
+      already appeared on launch
+- [ ] Tap **Allow notifications** — the system prompt appears
+- [ ] Accept it — the card disappears and the Push toggle becomes meaningful
+
+```bash
+docker exec coresync-postgres-1 psql -U coresync -d coresync -c "
+SELECT platform, device_name, is_active, (push_token IS NOT NULL) AS has_token
+FROM user_devices ORDER BY created_at DESC LIMIT 3;"
+```
+
+- [ ] Your device is listed, `is_active` true, `has_token` true
+- [ ] The token itself never appears anywhere in the app's own UI
+
+**Delivery.** Trigger a PR celebration by logging a set that beats a record, then:
+
+- [ ] A notification arrives on the device (may take up to a minute — the outbox runs on
+      a timer)
+- [ ] With the app **closed**, tap it — the app opens **on the workout**, not on Home
+- [ ] With the app **open**, one arrives as a banner rather than silently
+- [ ] With the app open, the Home bell badge increments without a tap
+
+**Preferences actually control delivery.**
+
+- [ ] Turn off "Personal records" in notification settings
+- [ ] Beat another record — **no push arrives**
+- [ ] The in-app list still shows it (in-app and push are separate channels)
+- [ ] Turn it back on — the next one arrives
+
+**Token lifecycle.**
+
+- [ ] Force-quit and reopen — check the database still shows exactly **one** device row,
+      not a new one per launch
+- [ ] Sign out — the device row disappears
+- [ ] Sign back in and re-allow — it reappears
+- [ ] Sign in as a **different account** on the same phone; the first account's row must
+      no longer have a token (notifications must not follow the phone to the wrong user)
+- [ ] Delete the app, then send a notification — the row is marked `is_active = false`
+      rather than retried forever
+
+**Denial path.**
+
+- [ ] On a fresh install, decline the OS prompt
+- [ ] The card now offers **Open device settings**, not a dead "Allow" button
+- [ ] Turning notifications on in iOS/Android settings and reopening the app registers
+      the device
+
 ### Sync
 
 - [ ] **Turn airplane mode off**

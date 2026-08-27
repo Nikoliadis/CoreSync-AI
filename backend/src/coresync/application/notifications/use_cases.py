@@ -134,6 +134,10 @@ class PublishNotificationUseCase:
         return notification
 
 
+class _NothingToSendError(Exception):
+    """No deliverable destination remained. Distinct from a delivery that failed."""
+
+
 class DispatchOutboxUseCase:
     """Sends what is due.
 
@@ -147,6 +151,30 @@ class DispatchOutboxUseCase:
         self._uow = uow
         self._clock = clock
         self._senders = senders
+
+    async def _send_push(self, sender: Any, notification: Notification, user_id: UUID) -> None:
+        """Push needs the devices, which only the unit of work can supply.
+
+        Handled here rather than inside the sender so the provider adapter never holds a
+        database session — a transaction open across a call to a third party is how a
+        slow provider becomes a database incident.
+        """
+        devices = await self._uow.devices.list_deliverable(user_id)
+        tokens = [device.push_token for device in devices if device.push_token]
+        if not tokens:
+            raise _NothingToSendError("no active device with a push token")
+
+        result = await sender.send_to_tokens(notification, tokens)
+
+        # A token the provider has condemned is stopped here, so the next notification
+        # does not spend an attempt on a device the app was deleted from.
+        for token in result.dead_tokens:
+            await self._uow.devices.deactivate_token(token)
+            logger.info("push_device_deactivated", user_id=str(user_id))
+
+        if not result.anything_delivered:
+            # Nothing landed and nothing is retryable — every token was dead or rejected.
+            raise _NothingToSendError("every device token was rejected")
 
     async def run(self, *, batch_size: int = DISPATCH_BATCH_SIZE) -> dict[str, int]:
         now = self._clock.now()
@@ -181,7 +209,18 @@ class DispatchOutboxUseCase:
                     continue
 
                 try:
-                    await sender.send(notification)
+                    if entry.channel is NotificationChannel.PUSH:
+                        await self._send_push(sender, notification, entry.user_id)
+                    else:
+                        await sender.send(notification)
+                except _NothingToSendError as reason:
+                    # Every device went away between queueing and sending — uninstalled,
+                    # or permission revoked. Retrying cannot succeed, so this is skipped
+                    # rather than failed, which would burn attempts against nothing.
+                    entry.skip(str(reason))
+                    counts["skipped"] += 1
+                    await self._uow.notification_outbox.update(entry)
+                    continue
                 except Exception as exc:
                     # One bad delivery must not abandon the batch — the remaining
                     # entries are unrelated and mostly fine.

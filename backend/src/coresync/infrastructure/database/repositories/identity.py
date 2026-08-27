@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select, text, update
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from coresync.domain.identity.entities import (
@@ -397,9 +397,60 @@ class SqlAlchemyUserDeviceRepository:
             UserDeviceMapper.to_entity(m) for m in (await self._session.execute(stmt)).scalars()
         ]
 
+    async def get_by_push_token(self, token: str) -> UserDevice | None:
+        stmt = select(UserDeviceModel).where(UserDeviceModel.push_token == token)
+        model = (await self._session.execute(stmt)).scalar_one_or_none()
+        return UserDeviceMapper.to_entity(model) if model else None
+
+    async def list_deliverable(self, user_id: UUID) -> list[UserDevice]:
+        stmt = (
+            select(UserDeviceModel)
+            .where(
+                UserDeviceModel.user_id == user_id,
+                UserDeviceModel.is_active.is_(True),
+                UserDeviceModel.push_token.is_not(None),
+            )
+            .order_by(UserDeviceModel.last_seen_at.desc().nullslast())
+        )
+        return [
+            UserDeviceMapper.to_entity(m) for m in (await self._session.execute(stmt)).scalars()
+        ]
+
     async def add(self, device: UserDevice) -> None:
         self._session.add(UserDeviceMapper.to_model(device))
         await self._session.flush()
+
+    async def update(self, device: UserDevice) -> None:
+        stmt = (
+            update(UserDeviceModel)
+            .where(UserDeviceModel.id == device.id)
+            .values(
+                platform=device.platform,
+                device_name=device.device_name,
+                push_token=device.push_token,
+                last_seen_at=device.last_seen_at,
+                is_active=device.is_active,
+            )
+        )
+        await self._session.execute(stmt)
+
+    async def remove(self, device_id: UUID, user_id: UUID) -> bool:
+        # Scoped to the user in the statement rather than checked beforehand: a read then
+        # a delete is two statements another request can slip between.
+        stmt = delete(UserDeviceModel).where(
+            UserDeviceModel.id == device_id,
+            UserDeviceModel.user_id == user_id,
+        )
+        result = await self._session.execute(stmt)
+        return bool(result.rowcount)
+
+    async def deactivate_token(self, token: str) -> None:
+        stmt = (
+            update(UserDeviceModel)
+            .where(UserDeviceModel.push_token == token)
+            .values(push_token=None, is_active=False)
+        )
+        await self._session.execute(stmt)
 
     async def touch(self, device_id: UUID, now: datetime) -> None:
         stmt = (

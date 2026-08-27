@@ -33,12 +33,23 @@ def _senders(settings: Settings) -> dict[NotificationChannel, Any]:
         ConsoleEmailSender,
         SmtpEmailSender,
     )
+    from coresync.infrastructure.notifications.push import ExpoPushSender
 
     # Keyed on environment, matching the API's composition root: `smtp_host` defaults
     # to "localhost" and is therefore always truthy, so branching on it would silently
     # pick SMTP everywhere including tests.
     email = ConsoleEmailSender() if settings.environment == "test" else SmtpEmailSender(settings)
-    return {NotificationChannel.EMAIL: email}
+    senders: dict[NotificationChannel, Any] = {NotificationChannel.EMAIL: email}
+
+    # Registered only when configured. An unregistered channel is *skipped* by the
+    # dispatcher, which is the right outcome for a deployment with no push provider —
+    # registering a sender that always fails would burn retries against nothing.
+    if settings.push_enabled:
+        senders[NotificationChannel.PUSH] = ExpoPushSender(
+            access_token=settings.expo_access_token or None
+        )
+
+    return senders
 
 
 @celery_app.task(

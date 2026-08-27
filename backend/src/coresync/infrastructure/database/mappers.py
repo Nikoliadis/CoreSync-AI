@@ -234,6 +234,7 @@ class UserDeviceMapper:
             device_name=model.device_name,
             push_token=model.push_token,
             last_seen_at=model.last_seen_at,
+            is_active=model.is_active,
         )
 
     @staticmethod
@@ -245,6 +246,7 @@ class UserDeviceMapper:
             device_name=entity.device_name,
             push_token=entity.push_token,
             last_seen_at=entity.last_seen_at,
+            is_active=entity.is_active,
         )
 
 

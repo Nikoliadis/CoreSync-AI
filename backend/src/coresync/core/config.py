@@ -83,7 +83,22 @@ class Settings(BaseSettings):
     account_lockout_minutes: int = 15
 
     google_oauth_client_id: str = ""
+    #: The Services ID, used by the *web* Sign in with Apple flow.
     apple_service_id: str = ""
+    #: The iOS app's bundle identifier.
+    #:
+    #: Apple issues a native token with `aud` set to the bundle id, and a web token with
+    #: `aud` set to the Services ID. They are different strings, so a verifier that knows
+    #: only one of them rejects every sign-in from the other platform.
+    apple_bundle_id: str = ""
+
+    # ----------------------------------------------------------------- push
+    #: Enables the Expo push sender. Off by default so a deployment without push
+    #: configured skips the channel cleanly rather than failing every notification.
+    push_enabled: bool = False
+    #: Optional. Only needed when the Expo project enforces push security; it is a
+    #: server credential and must never be shipped in a client build.
+    expo_access_token: str = ""
 
     # ---------------------------------------------------------------- email
     smtp_host: str = "localhost"
