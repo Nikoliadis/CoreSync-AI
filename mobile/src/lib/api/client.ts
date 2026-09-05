@@ -176,6 +176,22 @@ async function toApiError(response: Response): Promise<ApiError> {
   return new ApiError(response.status, code, message, details, requestId);
 }
 
+/**
+ * Whether a rejection is a deliberate cancellation rather than a failure.
+ *
+ * A cancelled request is the caller's own doing — a screen dismissed, a search
+ * superseded — and must propagate untouched rather than being reported to the user as a
+ * dead connection.
+ */
+function isAbort(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name?: unknown }).name === "AbortError"
+  );
+}
+
 async function request<T>(
   method: string,
   path: string,
@@ -203,7 +219,13 @@ async function request<T>(
   try {
     response = await send();
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    // Checked by name rather than `instanceof DOMException`.
+    //
+    // Hermes has no `DOMException` at all, so the `instanceof` threw a ReferenceError
+    // *inside this catch block* — which replaced whatever actually failed with a
+    // meaningless one, on every rejected request. The name is the part that carries the
+    // meaning anyway, and it is the same on both platforms.
+    if (isAbort(error)) throw error;
     // Status 0 means "never reached the server". Callers use `isOffline` to tell a dead
     // connection from a rejection, because in a gym those need different words.
     throw new ApiError(0, "network_error", "No connection.");

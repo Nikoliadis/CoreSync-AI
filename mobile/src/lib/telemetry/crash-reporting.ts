@@ -118,5 +118,16 @@ export function reportError(error: unknown, context?: Record<string, string>): v
   Sentry.captureException(error, context ? { tags: context } : undefined);
 }
 
-/** Wraps the root component so native crashes and unhandled JS errors are captured. */
-export const withCrashReporting = Sentry.wrap;
+/**
+ * Wraps the root component so native crashes and unhandled JS errors are captured.
+ *
+ * A pass-through when reporting is off. `Sentry.wrap` without a preceding `init` warns
+ * on every launch in development, and the wrapper has nothing to report to anyway — but
+ * it is still applied identically in both cases, so the component tree does not change
+ * shape between a development run and a release build.
+ */
+export function withCrashReporting<P extends Record<string, unknown>>(
+  component: React.ComponentType<P>,
+): React.ComponentType<P> {
+  return isCrashReportingEnabled() ? Sentry.wrap(component) : component;
+}

@@ -197,7 +197,9 @@ function AuthGate() {
 
   return (
     <Stack screenOptions={{ headerShown: false, animation: "fade" }}>
-      <Stack.Screen name="(auth)" />
+      {/* `(tabs)` is a real route because it has its own `_layout`. `(auth)` is only
+          a folder group — expo-router 6 warns on a Screen naming one, and the
+          declaration set no options, so the screens register by file convention. */}
       <Stack.Screen name="(tabs)" />
       <Stack.Screen
         name="workout/active"

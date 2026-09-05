@@ -113,4 +113,24 @@ export default defineConfig([
       "@typescript-eslint/no-non-null-assertion": "off",
     },
   },
+
+  {
+    // `asRoute` bridges a server-supplied deep link into expo-router's route union, and
+    // whether that assertion is "necessary" depends on files this rule cannot rely on.
+    //
+    // expo-router generates the union into `.expo/types`, which is gitignored and can
+    // only be produced by `expo start` — `expo export` does not write it, so CI never
+    // has it. The parameter is therefore a narrow union on a developer machine and a
+    // plain string in CI: the assertion is required in one and flagged as redundant in
+    // the other, and a disable comment would be reported as unused in whichever
+    // environment did not need it.
+    //
+    // Scoped to this one file rather than solved by turning off `typedRoutes`, which
+    // would give up compile-time checking of every hardcoded route in the app to fix a
+    // single unavoidable cast.
+    files: ["src/features/notifications/api.ts"],
+    rules: {
+      "@typescript-eslint/no-unnecessary-type-assertion": "off",
+    },
+  },
 ]);
