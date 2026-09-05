@@ -33,6 +33,17 @@ dependencies = [
     "structlog>=24.4",
     "orjson>=3.10",
     "python-multipart>=0.0.17",
+    # Progress photos. `boto3` talks to any S3-compatible store — MinIO locally, Azure
+    # Blob through its S3 gateway in production — and is used only for presigning and
+    # for the worker's read/write of one object at a time. It is synchronous, so every
+    # call from async code goes through `asyncio.to_thread` rather than blocking the
+    # loop; the alternative (`aioboto3`) drags in a second copy of botocore for a code
+    # path that runs a handful of times per photo.
+    "boto3>=1.35",
+    # Re-encodes an uploaded image without its metadata. The EXIF strip is the whole
+    # reason this dependency exists: a progress photo routinely carries the GPS
+    # coordinates of somebody's home (docs/11 §5).
+    "pillow>=11.0",
 ]
 
 [dependency-groups]
@@ -142,7 +153,7 @@ strict_equality = true
 warn_return_any = true
 
 [[tool.mypy.overrides]]
-module = ["testcontainers.*", "argon2.*", "celery.*"]
+module = ["testcontainers.*", "argon2.*", "celery.*", "boto3.*", "botocore.*"]
 ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------- pytest

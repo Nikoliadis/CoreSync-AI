@@ -167,6 +167,10 @@ class UploadIntent:
     photo_id: UUID
     blob_path: str
     upload_url: str
+    #: Opaque policy fields, posted back verbatim with the file. They carry the signature
+    #: and the size limit, which is what makes storage — rather than us, afterwards —
+    #: the thing that refuses an oversized upload.
+    fields: dict[str, str]
     expires_at: datetime
     max_bytes: int = MAX_UPLOAD_BYTES
     required_content_type: str | None = None

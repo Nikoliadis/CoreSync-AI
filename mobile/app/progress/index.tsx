@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { Plus } from "lucide-react-native";
+import { Camera, ChevronRight, Plus } from "lucide-react-native";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -206,6 +206,20 @@ export default function ProgressScreen() {
           )}
         </Card>
 
+        <Pressable
+          onPress={() => router.push("/progress/photos")}
+          accessibilityRole="button"
+          accessibilityLabel={t("photos.title")}
+        >
+          <Card style={styles.linkRow}>
+            <Camera size={18} color={theme.accentText} />
+            <Text variant="body" style={styles.grow}>
+              {t("photos.title")}
+            </Text>
+            <ChevronRight size={18} color={theme.textMuted} />
+          </Card>
+        </Pressable>
+
         <Card style={styles.section}>
           <Text variant="overline" tone="muted">
             {t("progress.volumeByMuscle")}
@@ -344,6 +358,7 @@ const styles = StyleSheet.create({
   },
   headline: { flexDirection: "row", alignItems: "baseline", gap: space.xs },
   change: { marginLeft: "auto" },
+  linkRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
   spinner: { marginVertical: space.lg },
   logRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
   weightField: {

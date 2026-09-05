@@ -22,6 +22,15 @@ from coresync.application.progress.measurements import (
     MeasurementHistoryQuery,
     MeasurementSeriesQuery,
 )
+from coresync.application.progress.photos import (
+    ComparePhotosUseCase,
+    DeletePhotoUseCase,
+    FinalizePhotoUseCase,
+    ListPhotosUseCase,
+    PhotoListQuery,
+    RequestPhotoUploadUseCase,
+    RequestUploadCommand,
+)
 from coresync.application.progress.stats import (
     GetDashboardUseCase,
     GetFrequencyUseCase,
@@ -49,8 +58,12 @@ from coresync.presentation.schemas.progress import (
     MeasurementSeriesResponse,
     MuscleVolumeBucketResponse,
     PeriodTotalsResponse,
+    PhotoComparisonResponse,
+    PhotoResponse,
     SiteTrendResponse,
     StreakResponse,
+    UploadIntentRequest,
+    UploadIntentResponse,
     WeightLogResponse,
     WeightPointResponse,
     WeightSeriesResponse,
@@ -316,3 +329,163 @@ async def all_records(
 ) -> list[PersonalRecordResponse]:
     records = await use_case.execute(user.id)
     return [PersonalRecordResponse.model_validate(r) for r in records]
+
+
+# ---------------------------------------------------------------------- photos
+#
+# Three calls rather than one, and the split is the security design rather than an
+# artefact of REST. The API issues a credential, the client writes the bytes straight to
+# private storage, and a second call brings the photo through processing. An API that
+# accepted the bytes would be an API that held an un-stripped photo in memory.
+#
+# Every endpoint here answers 503 when no bucket is configured. That is deliberate: it
+# says "photos are off in this deployment", which a client can distinguish from "you have
+# no photos".
+
+
+@router.post(
+    "/photos/upload-intent",
+    response_model=UploadIntentResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+        503: {"model": ErrorResponse},
+    },
+    summary="Reserve a photo and get a write-only upload URL",
+    description=(
+        "Creates a pending row and returns a credential scoped to exactly one object, "
+        "valid for a few minutes. The photo is not readable — and does not appear in the "
+        "timeline as an image — until `POST /photos/{id}/complete` has stripped its "
+        "metadata."
+    ),
+)
+async def request_photo_upload(
+    body: UploadIntentRequest,
+    user: deps.CurrentUser,
+    settings: deps.SettingsDep,
+    use_case: Annotated[RequestPhotoUploadUseCase, Depends(deps.request_photo_upload_use_case)],
+) -> UploadIntentResponse:
+    intent = await use_case.execute(
+        RequestUploadCommand(
+            user_id=user.id,
+            content_type=body.content_type,
+            pose=body.pose,
+            local_date=body.local_date,
+            note=body.note,
+        ),
+        ttl_seconds=settings.upload_url_ttl_seconds,
+    )
+    return UploadIntentResponse.model_validate(intent)
+
+
+@router.post(
+    "/photos/{photo_id}/complete",
+    response_model=PhotoResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+        503: {"model": ErrorResponse},
+    },
+    summary="Strip the metadata and make the photo readable",
+    description=(
+        "Re-encodes the uploaded image without EXIF, XMP or IPTC, writes a thumbnail, "
+        "and marks the photo ready. Idempotent — calling it on a ready photo returns it "
+        "unchanged rather than re-encoding. A failure here leaves the photo unreadable, "
+        "which is the only acceptable fallback."
+    ),
+)
+async def complete_photo(
+    photo_id: UUID,
+    user: deps.CurrentUser,
+    settings: deps.SettingsDep,
+    use_case: Annotated[FinalizePhotoUseCase, Depends(deps.finalize_photo_use_case)],
+) -> PhotoResponse:
+    photo = await use_case.execute(
+        photo_id=photo_id, user_id=user.id, ttl_seconds=settings.read_url_ttl_seconds
+    )
+    return PhotoResponse.model_validate(photo)
+
+
+@router.get(
+    "/photos",
+    response_model=list[PhotoResponse],
+    responses={503: {"model": ErrorResponse}},
+    summary="The photo timeline",
+    description=(
+        "Newest first. Read URLs are minted per request and expire in minutes, so a "
+        "cached or logged response body stops being useful almost immediately."
+    ),
+)
+async def list_photos(
+    user: deps.CurrentUser,
+    settings: deps.SettingsDep,
+    use_case: Annotated[ListPhotosUseCase, Depends(deps.list_photos_use_case)],
+    pose: Annotated[str | None, Query(pattern="front|side|back|custom")] = None,
+    date_from: Annotated[date | None, Query(alias="from")] = None,
+    date_to: Annotated[date | None, Query(alias="to")] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+) -> list[PhotoResponse]:
+    photos = await use_case.execute(
+        PhotoListQuery(
+            user_id=user.id,
+            pose=pose,
+            date_from=date_from,
+            date_to=date_to,
+            limit=limit,
+        ),
+        ttl_seconds=settings.read_url_ttl_seconds,
+    )
+    return [PhotoResponse.model_validate(p) for p in photos]
+
+
+@router.get(
+    "/photos/compare",
+    response_model=PhotoComparisonResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+        503: {"model": ErrorResponse},
+    },
+    summary="Two photos side by side",
+    description=(
+        "Always ordered older to newer regardless of the order asked for, so a slider "
+        "runs the way time does. `posesMatch` is false when the two are different poses "
+        "— comparing a front shot to a back shot tells the user nothing."
+    ),
+)
+async def compare_photos(
+    user: deps.CurrentUser,
+    settings: deps.SettingsDep,
+    use_case: Annotated[ComparePhotosUseCase, Depends(deps.compare_photos_use_case)],
+    first: Annotated[UUID, Query()],
+    second: Annotated[UUID, Query()],
+) -> PhotoComparisonResponse:
+    comparison = await use_case.execute(
+        user_id=user.id,
+        first_id=first,
+        second_id=second,
+        ttl_seconds=settings.read_url_ttl_seconds,
+    )
+    return PhotoComparisonResponse.model_validate(comparison)
+
+
+@router.delete(
+    "/photos/{photo_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={404: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
+    summary="Delete a photo",
+    description=(
+        "The row is soft-deleted for the audit trail the schema assumes; the image and "
+        "its thumbnail are removed from storage outright. 'Delete my photo' has to mean "
+        "the file is gone."
+    ),
+)
+async def delete_photo(
+    photo_id: UUID,
+    user: deps.CurrentUser,
+    use_case: Annotated[DeletePhotoUseCase, Depends(deps.delete_photo_use_case)],
+) -> None:
+    await use_case.execute(photo_id=photo_id, user_id=user.id)

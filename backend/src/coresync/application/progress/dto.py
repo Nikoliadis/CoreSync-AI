@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -135,3 +135,53 @@ class DashboardDTO:
     latest_measurement: MeasurementDTO | None
     recent_records: list[PersonalRecordDTO] = field(default_factory=list)
     nutrition: None = None
+
+
+# --------------------------------------------------------------------- photos
+@dataclass(frozen=True, slots=True)
+class PhotoDTO:
+    """One progress photo, as the client sees it.
+
+    ``url`` and ``thumbnail_url`` are short-lived signed URLs, minted per request and
+    never stored. They are ``None`` while the photo is still being processed, which is
+    the same thing as saying its EXIF has not been proven gone yet — the domain refuses
+    to issue a URL before then, and this DTO carries that refusal to the client rather
+    than papering over it with a placeholder image.
+    """
+
+    id: UUID
+    local_date: date
+    pose: str
+    processing_status: str
+    is_ready: bool
+    url: str | None
+    thumbnail_url: str | None
+    url_expires_at: datetime | None
+    width: int | None
+    height: int | None
+    weight_at_capture_kg: Decimal | None
+    note: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class UploadIntentDTO:
+    """Everything the client needs to put the bytes somewhere the API never sees."""
+
+    photo_id: UUID
+    upload_url: str
+    #: Opaque policy fields, posted back verbatim alongside the file. They carry the
+    #: signature and the size limit, which is what lets storage refuse an oversized
+    #: upload itself rather than us noticing afterwards.
+    fields: dict[str, str]
+    expires_at: datetime
+    max_bytes: int
+    required_content_type: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class PhotoComparisonDTO:
+    earlier: PhotoDTO
+    later: PhotoDTO
+    days_between: int
+    weight_delta_kg: Decimal | None
+    poses_match: bool

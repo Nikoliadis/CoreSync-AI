@@ -34,6 +34,7 @@ from coresync.domain.progress.services import (
 )
 from coresync.domain.workout.services import PersonalRecordDetector, VolumeCalculator
 from coresync.infrastructure.database.session import Database
+from coresync.infrastructure.storage.images import PillowImageProcessor
 from coresync.presentation.dependencies import AppContainer
 from coresync.presentation.main import create_app
 from tests.conftest import API_ROOT, subprocess_env
@@ -43,6 +44,7 @@ from tests.fakes import (
     FakeOidcVerifier,
     FakeRateLimiter,
     FakeRevocationStore,
+    InMemoryObjectStorage,
 )
 from tests.fakes_ai import ScriptedGateway
 
@@ -110,6 +112,17 @@ def llm_gateway() -> ScriptedGateway:
     return ScriptedGateway()
 
 
+@pytest.fixture
+def photo_storage() -> InMemoryObjectStorage:
+    """Stands in for the bucket.
+
+    Present in every API test rather than only the photo ones, so the photo endpoints
+    answer normally throughout the suite instead of 503 — a 503 that only some tests see
+    is how a wiring mistake stays hidden.
+    """
+    return InMemoryObjectStorage()
+
+
 @pytest_asyncio.fixture
 async def container(
     api_settings: Settings,
@@ -117,6 +130,7 @@ async def container(
     google_verifier: FakeOidcVerifier,
     apple_verifier: FakeOidcVerifier,
     llm_gateway: ScriptedGateway,
+    photo_storage: InMemoryObjectStorage,
 ) -> AsyncIterator[AppContainer]:
     clock = SystemClock()
     jwt_service = JwtService(api_settings)
@@ -153,6 +167,10 @@ async def container(
         # Small on purpose so quota enforcement is reachable in a test without sending
         # twenty messages.
         chat_quota=ChatQuota(daily_message_limit=3, daily_cost_ceiling_usd=Decimal("0.50")),
+        photo_storage=photo_storage,
+        # The real processor. It is pure CPU with no I/O and no configuration, and the
+        # EXIF strip is the one thing about this feature that must never be a double.
+        image_processor=PillowImageProcessor(),
     )
     await database.dispose()
 

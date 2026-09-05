@@ -7,11 +7,12 @@ whose absence should never make a test fail.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from coresync.application.common.ports import OidcIdentity
 from coresync.core.errors import InvalidTokenError
+from coresync.domain.progress.repositories import StoredObject
 
 
 class FakeRevocationStore:
@@ -105,3 +106,65 @@ class FakeOidcVerifier:
         if id_token.startswith("invalid") or self.identity is None:
             raise InvalidTokenError("fake rejection")
         return self.identity
+
+
+class InMemoryObjectStorage:
+    """An ``ObjectStoragePort`` backed by a dict.
+
+    The upload URL it returns is not a real URL and nothing writes to it — tests put the
+    bytes in directly with ``put``, standing in for the client's direct upload. That is
+    the honest boundary: what the API is responsible for is the credential and what
+    happens to the object afterwards, not S3's own PUT handling.
+    """
+
+    def __init__(self) -> None:
+        self.objects: dict[str, tuple[bytes, str]] = {}
+        self.upload_urls: list[str] = []
+        self.read_urls: list[str] = []
+        self.deleted: list[str] = []
+
+    def put(self, path: str, data: bytes, content_type: str = "image/jpeg") -> None:
+        """What the client's direct upload would have done."""
+        self.objects[path] = (data, content_type)
+
+    async def create_upload_credential(
+        self,
+        *,
+        path: str,
+        expires_in_seconds: int,
+        max_bytes: int,
+        content_type: str | None = None,
+    ) -> tuple[str, dict[str, str], datetime]:
+        url = f"https://storage.test/upload/{path}?max={max_bytes}"
+        self.upload_urls.append(url)
+        fields = {"key": path, "policy": "fake", "x-amz-signature": "fake"}
+        if content_type:
+            fields["Content-Type"] = content_type
+        return url, fields, datetime.now(UTC) + timedelta(seconds=expires_in_seconds)
+
+    async def create_read_url(self, *, path: str, expires_in_seconds: int) -> tuple[str, datetime]:
+        url = f"https://storage.test/read/{path}"
+        self.read_urls.append(url)
+        return url, datetime.now(UTC) + timedelta(seconds=expires_in_seconds)
+
+    async def read_bytes(self, path: str) -> bytes | None:
+        found = self.objects.get(path)
+        return found[0] if found else None
+
+    async def write_bytes(self, *, path: str, data: bytes, content_type: str) -> None:
+        self.objects[path] = (data, content_type)
+
+    async def delete(self, path: str) -> None:
+        self.deleted.append(path)
+        self.objects.pop(path, None)
+
+    async def head(self, path: str) -> StoredObject | None:
+        found = self.objects.get(path)
+        if found is None:
+            return None
+        data, content_type = found
+        return StoredObject(path=path, content_type=content_type, size_bytes=len(data))
+
+    async def ensure_bucket(self) -> None:
+        """A dict needs no provisioning."""
+        return None

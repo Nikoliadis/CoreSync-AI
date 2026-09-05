@@ -133,6 +133,13 @@ from coresync.application.progress.measurements import (
     ListMeasurementsUseCase,
     LogMeasurementUseCase,
 )
+from coresync.application.progress.photos import (
+    ComparePhotosUseCase,
+    DeletePhotoUseCase,
+    FinalizePhotoUseCase,
+    ListPhotosUseCase,
+    RequestPhotoUploadUseCase,
+)
 from coresync.application.progress.stats import (
     GetDashboardUseCase,
     GetFrequencyUseCase,
@@ -189,6 +196,7 @@ from coresync.domain.coaching.ports import EmbeddingGateway, LLMGateway
 from coresync.domain.identity.entities import AuthProvider
 from coresync.domain.identity.policies import PasswordPolicy
 from coresync.domain.profile.services import TdeeCalculator
+from coresync.domain.progress.repositories import ImageProcessorPort, ObjectStoragePort
 from coresync.domain.progress.services import (
     GoalProjector,
     MeasurementTrendCalculator,
@@ -237,6 +245,11 @@ class AppContainer:
     # disables the fallback entirely, which is what the test suite uses so a scan never
     # depends on a third party being up.
     external_foods: ExternalFoodLookup | None = None
+    # None when no bucket is configured, and the photo endpoints then answer 503. A
+    # deployment that has not decided where the most sensitive data in the system lives
+    # must not accept an upload it has nowhere to put.
+    photo_storage: ObjectStoragePort | None = None
+    image_processor: ImageProcessorPort | None = None
 
     def unit_of_work(self) -> UnitOfWork:
         return SqlAlchemyUnitOfWork(self.database.session_factory)
@@ -602,6 +615,47 @@ def delete_measurement_use_case(uow: Uow) -> DeleteMeasurementUseCase:
     return DeleteMeasurementUseCase(uow)
 
 
+# ------------------------------------------------------------------ photos
+def _require_photo_storage(c: AppContainer) -> ObjectStoragePort:
+    """503 when no bucket is configured.
+
+    Deliberately not a 404 or a silent empty list: "photos are turned off here" is a
+    different fact from "you have no photos", and a client that cannot tell them apart
+    will show someone an empty timeline and let them tap Add.
+    """
+    if c.photo_storage is None:
+        raise UpstreamUnavailableError("Progress photos are not available right now.")
+    return c.photo_storage
+
+
+def _require_image_processor(c: AppContainer) -> ImageProcessorPort:
+    if c.image_processor is None:  # pragma: no cover - always built
+        raise UpstreamUnavailableError("Progress photos are not available right now.")
+    return c.image_processor
+
+
+def request_photo_upload_use_case(c: Container, uow: Uow) -> RequestPhotoUploadUseCase:
+    return RequestPhotoUploadUseCase(uow, _require_photo_storage(c), c.clock)
+
+
+def finalize_photo_use_case(c: Container, uow: Uow) -> FinalizePhotoUseCase:
+    return FinalizePhotoUseCase(
+        uow, _require_photo_storage(c), _require_image_processor(c), c.clock
+    )
+
+
+def list_photos_use_case(c: Container, uow: Uow) -> ListPhotosUseCase:
+    return ListPhotosUseCase(uow, _require_photo_storage(c))
+
+
+def compare_photos_use_case(c: Container, uow: Uow) -> ComparePhotosUseCase:
+    return ComparePhotosUseCase(uow, _require_photo_storage(c))
+
+
+def delete_photo_use_case(c: Container, uow: Uow) -> DeletePhotoUseCase:
+    return DeletePhotoUseCase(uow, _require_photo_storage(c))
+
+
 def volume_stats_use_case(c: Container, uow: Uow) -> GetVolumeByMuscleGroupUseCase:
     return GetVolumeByMuscleGroupUseCase(uow, c.clock)
 
@@ -849,6 +903,8 @@ def build_container(settings: Settings) -> AppContainer:
         HibpBreachChecker,
         NoopBreachChecker,
     )
+    from coresync.infrastructure.storage.images import PillowImageProcessor
+    from coresync.infrastructure.storage.s3 import S3ObjectStorage
 
     clock = SystemClock()
     jwt_service = JwtService(settings)
@@ -875,6 +931,16 @@ def build_container(settings: Settings) -> AppContainer:
             deployment=settings.azure_openai_embedding_deployment,
             api_version=settings.azure_openai_api_version,
             dimensions=settings.ai_embedding_dimensions,
+        )
+
+    photo_storage: ObjectStoragePort | None = None
+    if settings.photos_enabled:
+        photo_storage = S3ObjectStorage(
+            bucket=settings.s3_bucket,
+            endpoint_url=settings.s3_endpoint_url,
+            region=settings.s3_region,
+            access_key=settings.s3_access_key,
+            secret_key=settings.s3_secret_key,
         )
 
     return AppContainer(
@@ -912,4 +978,9 @@ def build_container(settings: Settings) -> AppContainer:
             daily_message_limit=settings.ai_free_daily_message_limit,
             daily_cost_ceiling_usd=Decimal(str(settings.ai_free_daily_cost_ceiling_usd)),
         ),
+        photo_storage=photo_storage,
+        # Always present. It is pure CPU work with no configuration of its own, and
+        # having it available regardless keeps the 503 about storage — the thing that is
+        # actually missing — rather than about two separate absences.
+        image_processor=PillowImageProcessor(),
     )

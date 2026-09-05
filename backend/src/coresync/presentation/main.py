@@ -52,6 +52,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # The object graph is built once here. A failure to construct it — a bad DSN, a
         # missing secret — stops the process at boot rather than on first request.
         app.state.container = build_container(settings)
+
+        # Creates the photo container if it is missing. A no-op against a provisioned
+        # production bucket, and it logs rather than raises when the credential is not
+        # allowed to create one — which is the correct posture for production. It exists
+        # so a developer with a fresh MinIO volume does not get a 500 on their first
+        # upload from a bucket nobody told them to make.
+        if settings.photos_enabled and app.state.container.photo_storage is not None:
+            await app.state.container.photo_storage.ensure_bucket()
+
         logger.info("api_started", environment=settings.environment)
         try:
             yield

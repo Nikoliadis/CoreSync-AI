@@ -116,6 +116,47 @@ Known and unresolved:
 
 ---
 
+## 4b. Progress photos
+
+**Built and verified, including the part that matters.**
+
+The feature is gated on one rule from [11 · Security](11-security.md) §5: a photo is not
+readable until its metadata is proven gone. `ProgressPhoto.is_readable` is false unless
+processing completed *and* `exif_stripped_at` was recorded, and it is the single gate on
+issuing a read URL.
+
+| Piece | State |
+|---|---|
+| Upload credential | A signed POST policy scoped to one object key, valid for minutes. No list, no read, no delete, no other key |
+| Size limit | A `content-length-range` condition, so the **bucket** refuses an oversized body rather than us noticing afterwards |
+| Bytes through the API | Never. Client posts directly to private storage |
+| EXIF / XMP / IPTC strip | A full re-encode from decoded pixels, not a field-by-field scrub. Verified after the fact; a photo whose metadata cannot be proven gone stays unreadable |
+| Orientation | Applied to the pixels and the tag dropped, so the strip stays a strip and portraits are not sideways |
+| Thumbnails | Generated from the sanitised image and checked separately — a separate object, and the one an implementation forgets |
+| Read URLs | Minted per request, never stored, `attachment` disposition |
+| Deletion | Row soft-deleted for the audit trail; the image *and* its thumbnail hard-deleted from storage |
+| Decompression bombs | Pillow's pixel ceiling lowered and made fatal |
+
+Tested by `tests/unit/infrastructure/test_image_processing.py` (19 cases — the fixture
+carries real GPS coordinates and there is a test asserting it does, so the strip cannot
+pass by having nothing to remove), `tests/api/test_progress_photos.py` (27) and
+`tests/integration/test_object_storage.py` (8, against a live S3-compatible server).
+
+**One thing worth recording**, because it is the lesson rather than the bug. The upload
+credential was first written as a presigned PUT with the size limit signed in as
+`Content-Length`. It passed unit tests, type checking and the entire API suite — all of
+which run against an in-memory double — and it could not have worked for any client:
+`Content-Length` becomes part of the signature, so the body would have to be *exactly*
+15 MB, and a browser will not let script set that header anyway. Against a real MinIO it
+returned `403 SignatureDoesNotMatch` on every upload. The integration suite above exists
+because of it: **a fake cannot tell you whether a boundary works.**
+
+**Not verified:** no photo has been through this from a real phone with location
+services on. That check is D2–D4 in [18 · Device validation](18-device-validation.md)
+and it is the one that actually proves the guarantee.
+
+---
+
 ## 5. Not started
 
 Named here rather than omitted, because a phase status that lists only what was done

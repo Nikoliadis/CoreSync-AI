@@ -190,6 +190,27 @@ export const en = {
   "progress.kgTrend": "kg trend",
   "progress.centimetres": "{name} in centimetres",
 
+  // ------------------------------------------------------------------- photos
+  "photos.title": "Progress photos",
+  "photos.privacyNote":
+    "Only you can see these. Location data is stripped from every photo before it is stored, and the links this screen uses expire within minutes.",
+  "photos.pose.front": "Front",
+  "photos.pose.side": "Side",
+  "photos.pose.back": "Back",
+  "photos.add": "Add a photo",
+  "photos.empty":
+    "Nothing here yet. Same spot, same light, same time of day — consistency is what makes the comparison mean anything.",
+  "photos.apart": "apart",
+  "photos.poseMismatch": "Those are different poses, so the comparison will not tell you much.",
+  "photos.photoFrom": "Photo from {date}",
+  "photos.processing": "Processing",
+  "photos.failed": "Could not process",
+  "photos.deleteTitle": "Delete this photo?",
+  "photos.deleteBody": "The file is removed for good. This cannot be undone.",
+  "photos.deleteHint": "Press and hold to delete",
+  "photos.permissionTitle": "Photo access is off",
+  "photos.permissionBody": "CoreSync needs access to your photo library to add a progress photo.",
+
   // -------------------------------------------------------------------- goals
   "goals.title": "Goal",
   "goals.targetWeight": "Target weight",

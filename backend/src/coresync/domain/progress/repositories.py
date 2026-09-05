@@ -108,15 +108,25 @@ class ObjectStoragePort(Protocol):
     session that asked for it (docs/11 §5).
     """
 
-    async def create_upload_url(
+    async def create_upload_credential(
         self,
         *,
         path: str,
         expires_in_seconds: int,
         max_bytes: int,
         content_type: str | None = None,
-    ) -> tuple[str, datetime]:
-        """A write-only URL for exactly this object, and when it expires."""
+    ) -> tuple[str, dict[str, str], datetime]:
+        """A write-only credential for exactly this object: URL, form fields, expiry.
+
+        A browser-form POST rather than a signed PUT, and the difference is not
+        cosmetic. The size limit has to be a *condition of the policy* so that storage
+        refuses an oversized body itself. Signing it into a PUT instead makes the exact
+        content length part of the signature, which no client can satisfy — a browser
+        sets ``Content-Length`` from the body and refuses to let script override it, so
+        every upload fails with a signature mismatch.
+
+        The fields are opaque and must be posted back verbatim alongside the file.
+        """
         ...
 
     async def create_read_url(self, *, path: str, expires_in_seconds: int) -> tuple[str, datetime]:
@@ -131,6 +141,16 @@ class ObjectStoragePort(Protocol):
 
     async def head(self, path: str) -> StoredObject | None:
         """Object metadata, or None if the client never completed the upload."""
+        ...
+
+    async def ensure_bucket(self) -> None:
+        """Make sure the container exists.
+
+        Called once at boot. A production deployment provisions its container out of
+        band, so this is a no-op there and an implementation whose credential cannot
+        create one must log rather than raise — being refused is the expected outcome
+        for a correctly-scoped production key, not a failure to start.
+        """
         ...
 
 

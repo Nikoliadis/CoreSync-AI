@@ -108,6 +108,25 @@ class Settings(BaseSettings):
     #: server credential and must never be shipped in a client build.
     expo_access_token: str = ""
 
+    # -------------------------------------------------------------- storage
+    #: Where progress photos live. ``none`` is the default and it is a real state, not a
+    #: misconfiguration: with no bucket configured the photo endpoints answer 503 and say
+    #: so, which is the honest outcome for a deployment that has not decided where the
+    #: most sensitive data in the system is going to be kept.
+    storage_backend: Literal["none", "s3compat"] = "none"
+    s3_endpoint_url: str = ""
+    s3_bucket: str = "coresync-progress-photos"
+    s3_region: str = "us-east-1"
+    s3_access_key: str = ""
+    s3_secret_key: str = ""
+
+    #: How long an upload credential lives. Long enough for a 15 MB photo on a poor
+    #: connection, short enough that a leaked URL is worthless by the time it is read.
+    upload_url_ttl_seconds: int = Field(default=900, ge=60, le=3600)
+    #: Read URLs are shorter still. A progress photo must never have a URL that outlives
+    #: the session that asked for it (docs/11 §5).
+    read_url_ttl_seconds: int = Field(default=300, ge=30, le=3600)
+
     # ---------------------------------------------------------------- email
     smtp_host: str = "localhost"
     smtp_port: int = 1025
@@ -169,6 +188,20 @@ class Settings(BaseSettings):
         503 from the AI endpoints while the rest of the API works normally.
         """
         return bool(self.azure_openai_endpoint and self.azure_openai_api_key)
+
+    @property
+    def photos_enabled(self) -> bool:
+        """Whether progress photos have somewhere to live.
+
+        Every part of the feature is gated on this at the composition root, so a
+        deployment with no bucket returns 503 from the photo endpoints and works
+        normally everywhere else. It is checked rather than assumed because the
+        alternative — accepting an upload with nowhere to put it — would leave a row
+        claiming a photo exists that can never be shown.
+        """
+        return self.storage_backend == "s3compat" and bool(
+            self.s3_bucket and self.s3_access_key and self.s3_secret_key
+        )
 
     @property
     def broker_url(self) -> str:

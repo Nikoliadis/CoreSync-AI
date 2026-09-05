@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 from pydantic import Field
@@ -170,3 +171,65 @@ class DashboardResponse(ApiModel):
     latest_measurement: MeasurementResponse | None = None
     recent_records: list[PersonalRecordResponse] = Field(default_factory=list)
     nutrition: None = None
+
+
+# ------------------------------------------------------------------- photos
+class UploadIntentRequest(ApiModel):
+    """What the client says it is about to upload.
+
+    The content type is required rather than sniffed, because it is baked into the
+    signature of the upload URL: storage refuses a body that does not match, so a client
+    that lies here cannot upload at all.
+    """
+
+    content_type: str = Field(max_length=64)
+    pose: Literal["front", "side", "back", "custom"] = "front"
+    local_date: date | None = None
+    note: str | None = Field(default=None, max_length=500)
+
+
+class UploadIntentResponse(ApiModel):
+    """Where to POST the file, and what to post alongside it.
+
+    A browser-form POST rather than a PUT, so the size limit is a condition of the
+    signed policy and storage refuses an oversized body itself. `fields` is opaque —
+    send every entry back unchanged, then the file last.
+    """
+
+    photo_id: UUID
+    upload_url: str
+    fields: dict[str, str]
+    expires_at: datetime
+    max_bytes: int
+    required_content_type: str | None
+
+
+class PhotoResponse(ApiModel):
+    """One photo.
+
+    `url` and `thumbnailUrl` are short-lived signed URLs minted for this response and
+    never stored. They are null while the photo is still processing, which is the same
+    statement as "its metadata has not been proven gone" — the client shows a pending
+    tile rather than an image.
+    """
+
+    id: UUID
+    local_date: date
+    pose: str
+    processing_status: str
+    is_ready: bool
+    url: str | None
+    thumbnail_url: str | None
+    url_expires_at: datetime | None
+    width: int | None
+    height: int | None
+    weight_at_capture_kg: Decimal | None
+    note: str | None
+
+
+class PhotoComparisonResponse(ApiModel):
+    earlier: PhotoResponse
+    later: PhotoResponse
+    days_between: int
+    weight_delta_kg: Decimal | None
+    poses_match: bool
